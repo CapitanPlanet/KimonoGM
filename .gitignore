@@ -1,14 +1,16 @@
-bin/
-obj/
-publish/
-dist/
-node_modules/
+**/bin/
+**/obj/
+**/publish/
+**/dist/
+**/node_modules/
 _old_images_backup/
-wwwroot/lib/
+wwwroot/
+games/*/wwwroot/
 *.exe
 *.zip
 .vs/
 .idea/
-# dziwne pliki co masz
-et\ --hard*
 *.lscache
+
+# to do wywalenia:
+# et\ --hard*
