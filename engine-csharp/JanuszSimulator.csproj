@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
   
-    <PropertyGroup>
+  <PropertyGroup>
     <DefaultItemExcludes>$(DefaultItemExcludes);Tools\**</DefaultItemExcludes>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -14,33 +14,24 @@
 
   <ItemGroup>
     <GameImages Include="Assets\GameImages\**\*.*" />
+    <GameImages Include="Assets\images\**\*.*" />
+    <GameImages Include="..\games\10003\images\**\*.*" />
     <SoundFiles Include="Assets\sounds\**\*.*" />
-    <DataFiles Include="Assets\data\**\*.*" Exclude="Assets\data\day*.json;Assets\data\mielno_ending.json" />
+    <!-- BEZ Exclude na day*.json - chcemy czyste day1, day2 -->
+    <DataFiles Include="Assets\data\**\*.*" Exclude="Assets\data\mielno_ending.json" />
   </ItemGroup>
-  <Target Name="CleanGameImagesBeforeBuild" BeforeTargets="BeforeBuild;Publish">
-    <ItemGroup>
-      <OldImages Include="wwwroot\images\*" Exclude="wwwroot\images\av_*.jpg;wwwroot\images\bg_*.jpg;wwwroot\images\re_*.jpg" />
-    </ItemGroup>
-    <Delete Files="@(OldImages)" />
-  </Target>
+
+  <!-- USUNIĘTE CleanGameImagesBeforeBuild - to kasowało Ci bg_front i robiło 404 -->
+
   <Target Name="CopyGameAssets" BeforeTargets="BeforeBuild">
-    <Copy SourceFiles="@(GameImages)" 
-          DestinationFolder="wwwroot\Images\%(RecursiveDir)" 
-          SkipUnchangedFiles="true" />
-    
-    <Copy SourceFiles="@(SoundFiles)" 
-          DestinationFolder="wwwroot\sounds\%(RecursiveDir)" 
-          SkipUnchangedFiles="true" />
-    
-    <Copy SourceFiles="@(DataFiles)" 
-          DestinationFolder="wwwroot\data\%(RecursiveDir)" 
-          SkipUnchangedFiles="true" />
-    
-    <Message Importance="high" Text="Assets -> wwwroot: GameImages, sounds, data SKOPIOWANE" />
+    <MakeDir Directories="wwwroot\images;wwwroot\Images;wwwroot\data;wwwroot\sounds" />
+    <Copy SourceFiles="@(GameImages)" DestinationFolder="wwwroot\Images\%(RecursiveDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(GameImages)" DestinationFolder="wwwroot\images\%(RecursiveDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(SoundFiles)" DestinationFolder="wwwroot\sounds\%(RecursiveDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(DataFiles)" DestinationFolder="wwwroot\data\%(RecursiveDir)" SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="Assets -> wwwroot: GameImages, sounds, data SKOPIOWANE (bez bundla)" />
   </Target>
 
-  <Target Name="BundleDaysToScenes" BeforeTargets="Build">
-    <Exec Command="dotnet run --project Tools/BundleScenes.csproj -- $(MSBuildProjectDirectory)" />
-  </Target>
+  <!-- USUNIĘTE BundleDaysToScenes - nie lepimy plików -->
 
 </Project>

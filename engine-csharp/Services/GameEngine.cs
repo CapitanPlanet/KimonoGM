@@ -24,14 +24,11 @@ public class GameEngine
         _js = js;
     }
 
-    public class GameDataWrapper
-    {
-        public List<Scene> scenes { get; set; } = new();
-    }
+    public class GameDataWrapper { public List<Scene> scenes { get; set; } = new(); }
 
     public class AvatarSystem
     {
-        public string Default { get; set; } = "images/av_front.jpg";
+        public string Default { get; set; } = "";
         public string? FallbackDefault { get; set; }
         public List<AvatarRule> Rules { get; set; } = new();
     }
@@ -44,6 +41,15 @@ public class GameEngine
         public Dictionary<string, Dictionary<string, int>>? If { get; set; }
         public int Priority { get; set; } = 0;
     }
+    public class ProjectManifest
+    {
+        public string gameName { get; set; } = "";
+        public string startDay { get; set; } = "day1";
+        public string startScene { get; set; } = "start";
+        public AvatarSystem avatarSystem { get; set; } = new();
+        public StatsSystem statsSystem { get; set; } = new();
+    }
+    public class StatsSystem { public List<StatDef> stats { get; set; } = new(); }
 
     private string NormalizeStatId(string raw)
     {
@@ -51,15 +57,8 @@ public class GameEngine
         var up = raw.Trim().ToUpperInvariant();
         return up switch
         {
-            "A" => "CEBULA",
-            "B" => "WSTYD",
-            "C" => "PORTFEL",
-            "D" => "REPUTACJA",
-            "E" => "REPUTACJA",
-            "CEBULA" => "CEBULA",
-            "WSTYD" => "WSTYD",
-            "PORTFEL" => "PORTFEL",
-            "REPUTACJA" => "REPUTACJA",
+            "A" => "CEBULA", "B" => "WSTYD", "C" => "PORTFEL", "D" => "REPUTACJA", "E" => "REPUTACJA",
+            "CEBULA" => "CEBULA", "WSTYD" => "WSTYD", "PORTFEL" => "PORTFEL", "REPUTACJA" => "REPUTACJA",
             _ => up
         };
     }
@@ -67,7 +66,7 @@ public class GameEngine
     private bool IsAllowedAsset(string path)
     {
         if (string.IsNullOrWhiteSpace(path)) return false;
-        var file = Path.GetFileName(path).ToLowerInvariant();
+        var file = Path.GetFileName(path).ToLowerInvariant().Trim();
         bool hasPrefix = _allowedPrefixes.Any(p => file.StartsWith(p));
         bool isAllowedExt = file.EndsWith(".jpg") || file.EndsWith(".jpeg") || file.EndsWith(".png") || file.EndsWith(".webp");
         return hasPrefix && isAllowedExt;
@@ -75,78 +74,84 @@ public class GameEngine
 
     private string NormalizeBg(string? raw)
     {
-        if (string.IsNullOrWhiteSpace(raw)) return "images/bg_dom.jpg";
-        raw = raw.Trim().Replace("\\", "/");
-        if (!raw.StartsWith("images/")) raw = $"images/{Path.GetFileName(raw)}";
-        if (!IsAllowedAsset(raw))
-        {
-            Console.WriteLine($"[BG] Blokuję {raw} -> bg_dom.jpg");
-            return "images/bg_dom.jpg";
-        }
-        return raw;
+        if (string.IsNullOrWhiteSpace(raw)) return "images/bg_front.jpg";
+        raw = raw.Trim().Replace("\\", "/").Trim();
+        var fileName = Path.GetFileName(raw);
+        if (string.IsNullOrWhiteSpace(fileName)) return "images/bg_front.jpg";
+        return $"images/{fileName}";
     }
 
     public async Task LoadGame()
     {
-        // 1. Ładuj dni - nowy system day1, day2
         GameState.AllScenes = new List<Scene>();
         _currentDayId = "day1";
+        ProjectManifest? project = null;
+
+        // 1. LOAD project.janproj - TWOJE staty QQQQ, WWW itp
         try
         {
-            var day1 = await _http.GetFromJsonAsync<List<Scene>>($"data/{_currentDayId}.json");
-            if (day1!= null) GameState.AllScenes.AddRange(day1);
+            var respProj = await _http.GetAsync("data/project.janproj");
+            if (respProj.IsSuccessStatusCode)
+            {
+                project = await respProj.Content.ReadFromJsonAsync<ProjectManifest>();
+                Console.WriteLine($"[Game] project.janproj: {project?.statsSystem?.stats?.Count} statow");
+            }
+            else
+            {
+                // fallback - szukaj w root
+                var resp2 = await _http.GetAsync("project.janproj");
+                if (resp2.IsSuccessStatusCode) project = await resp2.Content.ReadFromJsonAsync<ProjectManifest>();
+            }
         }
-        catch
+        catch (Exception ex) { Console.WriteLine($"[Game] brak project.janproj: {ex.Message}"); }
+
+        // 2. STATY Z PROJEKTU - bez hardcoda
+        if (project?.statsSystem?.stats!= null && project.statsSystem.stats.Any())
         {
-            // fallback stary scenes.json
+            GameState.StatDefs = project.statsSystem.stats.Select(s => new StatDef
+            {
+                id = NormalizeStatId(s.id), // klucz normalizowany do lookupu
+                name = string.IsNullOrWhiteSpace(s.name)? s.id : s.name, // nazwa oryginalna QQQQ
+                initial = s.initial
+            }).ToList();
+            Console.WriteLine($"[Game] Staty z projektu: {string.Join(",", GameState.StatDefs.Select(s=>s.name))}");
+        }
+
+        // 3. AVATAR Z PROJEKTU
+        if (project?.avatarSystem!= null)
+        {
+            var def = project.avatarSystem.Default;
+            var filteredRules = project.avatarSystem.Rules.Where(r => IsAllowedAsset(r.Use)).ToList();
+            _avatarSystem = new AvatarSystem { Default = IsAllowedAsset(def)? def : def?? "", Rules = filteredRules };
+            Console.WriteLine($"[Avatar] z project.janproj: default={_avatarSystem.Default} regul={filteredRules.Count}");
+        }
+        else
+        {
+            _avatarSystem = new AvatarSystem { Default = "", Rules = new() };
+        }
+
+        _currentDayId = project?.startDay?? "day1";
+        var startSceneId = project?.startScene?? "start";
+
+        try
+        {
+            Console.WriteLine($"[Game] Probuje ladowac data/{_currentDayId}.json");
+            var day1 = await _http.GetFromJsonAsync<List<Scene>>($"data/{_currentDayId}.json");
+            if (day1!= null && day1.Any())
+            {
+                GameState.AllScenes.AddRange(day1);
+                Console.WriteLine($"[Game] Zaladowano {day1.Count} scen z {_currentDayId}.json");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Game] Nie udalo sie zaladowac {_currentDayId}.json: {ex.Message}");
             try
             {
                 var data = await _http.GetFromJsonAsync<GameDataWrapper>("data/scenes.json")?? new();
                 GameState.AllScenes = data.scenes;
             }
-            catch { }
-        }
-
-        try
-        {
-            var statSystem = await _http.GetFromJsonAsync<StatsSystem>("data/_statsSystem.json");
-            if (statSystem!= null && statSystem.stats.Any())
-                GameState.StatDefs = statSystem.stats.Select(s => new StatDef { id = NormalizeStatId(s.id), name = NormalizeStatId(s.name), initial = s.initial }).ToList();
-        }
-        catch { }
-
-        try
-        {
-            // FIX: edytor zapisuje _avatarSystem.json a nie avatarSystem.json
-            AvatarSystem? avatarSys = null;
-            try { avatarSys = await _http.GetFromJsonAsync<AvatarSystem>("data/_avatarSystem.json"); } catch { }
-            if (avatarSys == null) avatarSys = await _http.GetFromJsonAsync<AvatarSystem>("data/avatarSystem.json");
-
-            if (avatarSys!= null)
-            {
-                var filteredRules = avatarSys.Rules
-                 .Where(r => IsAllowedAsset(r.Use))
-                 .Select(r => {
-                      if (r.If!= null)
-                      {
-                          var newIf = new Dictionary<string, Dictionary<string, int>>();
-                          foreach (var kv in r.If) newIf[NormalizeStatId(kv.Key)] = kv.Value;
-                          r.If = newIf;
-                      }
-                      return r;
-                  })
-                 .OrderByDescending(r => r.Priority)
-                 .ToList();
-
-                var defaultPath = IsAllowedAsset(avatarSys.Default)? avatarSys.Default : "images/av_front.jpg";
-                _avatarSystem = new AvatarSystem { Default = defaultPath, FallbackDefault = avatarSys.FallbackDefault, Rules = filteredRules };
-                Console.WriteLine($"[Avatar] {filteredRules.Count} reguł");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Avatar] fallback: {ex.Message}");
-            _avatarSystem = new AvatarSystem { Default = "images/av_front.jpg", Rules = new() };
+            catch {}
         }
 
         GameState.Stats = new DynamicStats();
@@ -154,15 +159,7 @@ public class GameEngine
         GameState.ReactionImage = "";
         GameState.ReactionText = "";
 
-        if (GameState.StatDefs.Any())
-        {
-            foreach (var def in GameState.StatDefs)
-            {
-                var nid = NormalizeStatId(def.id);
-                GameState.Stats.Values[nid] = def.initial;
-            }
-        }
-        else
+        if (!GameState.StatDefs.Any())
         {
             GameState.StatDefs = new List<StatDef>
             {
@@ -171,14 +168,15 @@ public class GameEngine
                 new() { id = "PORTFEL", name = "PORTFEL", initial = 100 },
                 new() { id = "REPUTACJA", name = "REPUTACJA", initial = 50 },
             };
-            foreach (var d in GameState.StatDefs) GameState.Stats.Values[d.id] = d.initial;
         }
+        foreach (var d in GameState.StatDefs) GameState.Stats.Values[NormalizeStatId(d.id)] = d.initial;
 
-        var targetId = "start";
+        var targetId = startSceneId;
         if (!GameState.AllScenes.Any(s => s.Id == targetId))
-        {
-            targetId = GameState.AllScenes.FirstOrDefault(s => s.Id.StartsWith("start"))?.Id?? GameState.AllScenes.FirstOrDefault()?.Id?? "start";
-        }
+            targetId = GameState.AllScenes.FirstOrDefault(s => s.Id == targetId)?.Id
+                   ?? GameState.AllScenes.FirstOrDefault(s => s.Id.StartsWith("start"))?.Id
+                   ?? GameState.AllScenes.FirstOrDefault()?.Id?? "start";
+
         Console.WriteLine($"[Game] Start sceny: {targetId} z {GameState.AllScenes.Count} scen");
         LoadScene(targetId);
     }
@@ -199,45 +197,28 @@ public class GameEngine
                 LoadScene(start);
             }
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Game] Nie udało się załadować {dayId}: {ex.Message}");
-        }
+        catch (Exception ex) { Console.WriteLine($"[Game] Nie udało się załadować {dayId}: {ex.Message}"); }
     }
 
     public void LoadScene(string sceneId)
     {
-        if (sceneId == "END_DAY")
-        {
-            Console.WriteLine("[Game] END_DAY jako LoadScene - ignoruję, użyj LoadDay");
-            return;
-        }
+        if (sceneId == "END_DAY") return;
         GameState.CurrentScene = GameState.AllScenes.FirstOrDefault(s => s.Id == sceneId);
-        if (GameState.CurrentScene == null)
-        {
-            Console.WriteLine($"[Game] Nie znaleziono sceny {sceneId}");
-            return;
-        }
-
+        if (GameState.CurrentScene == null) { Console.WriteLine($"[Game] Nie znaleziono sceny {sceneId}"); return; }
         GameState.BackgroundImage = NormalizeBg(GameState.CurrentScene.Background);
         GameState.SceneTitle = GameState.CurrentScene.SceneTitle?? "";
         GameState.NarrationText = GameState.CurrentScene.Text?? "";
         GameState.CurrentChoices = GameState.CurrentScene.Choices?? new List<Choice>();
-        GameState.ReactionText = "";
-        GameState.ReactionImage = "";
+        GameState.ReactionText = ""; GameState.ReactionImage = "";
         GameState.IsFinished = GameState.CurrentChoices.Count == 0;
-
-        UpdateAvatar();
-        NotifyStateChanged();
+        UpdateAvatar(); NotifyStateChanged();
     }
 
     public bool CanSelectChoice(Choice choice)
     {
         if (choice.FlagsRequired.Any() &&!choice.FlagsRequired.All(f => GameState.Flags.Contains(f))) return false;
-        foreach (var kv in choice.MinStats)
-            if (GameState.Stats.Get(NormalizeStatId(kv.Key)) < kv.Value) return false;
-        foreach (var kv in choice.MaxStats)
-            if (GameState.Stats.Get(NormalizeStatId(kv.Key)) > kv.Value) return false;
+        foreach (var kv in choice.MinStats) if (GameState.Stats.Get(NormalizeStatId(kv.Key)) < kv.Value) return false;
+        foreach (var kv in choice.MaxStats) if (GameState.Stats.Get(NormalizeStatId(kv.Key)) > kv.Value) return false;
         if (choice.KosztPortfel.HasValue && GameState.Stats.Get("PORTFEL") < choice.KosztPortfel.Value) return false;
         return true;
     }
@@ -250,50 +231,30 @@ public class GameEngine
         if (!CanSelectChoice(choice))
         {
             GameState.ReactionText = string.IsNullOrWhiteSpace(choice.FailText)? "Nie możesz tego zrobić, Janusz." : choice.FailText;
-            GameState.ReactionImage = "images/av_back.jpg";
-            NotifyStateChanged();
-            await Task.Delay(5000);
-            GameState.ReactionText = "";
-            GameState.ReactionImage = "";
-            NotifyStateChanged();
-            return;
+            GameState.ReactionImage = ""; NotifyStateChanged();
+            await Task.Delay(5000); GameState.ReactionText = ""; GameState.ReactionImage = ""; NotifyStateChanged(); return;
         }
-
-        if (!_musicStarted)
-        {
-            _musicStarted = true;
-            try { await _js.InvokeVoidAsync("JanuszAudio.startMusic", "sounds/s1.mp3"); } catch {}
-        }
-
-        _reactionCts?.Cancel();
-        ApplyChoiceEffects(choice);
-
-        GameState.ReactionText = string.IsNullOrWhiteSpace(choice.ReactionText)? "Janusz coś kombinuje..." : choice.ReactionText;
+        if (!_musicStarted) { _musicStarted = true; try { await _js.InvokeVoidAsync("JanuszAudio.startMusic", "sounds/s1.mp3"); } catch {} }
+        _reactionCts?.Cancel(); ApplyChoiceEffects(choice);
+        GameState.ReactionText = string.IsNullOrWhiteSpace(choice.ReactionText)? "" : choice.ReactionText;
         var reactionImgRaw = choice.ReactionImage;
-        if (string.IsNullOrWhiteSpace(reactionImgRaw)) reactionImgRaw = "images/av_front.jpg";
-        else if (!IsAllowedAsset(reactionImgRaw)) reactionImgRaw = "images/av_front.jpg";
-        GameState.ReactionImage = reactionImgRaw;
-        NotifyStateChanged();
-
-        if (!string.IsNullOrWhiteSpace(choice.SoundFile))
-            _ = _js.InvokeVoidAsync("JanuszAudio.playVoice", $"sounds/{choice.SoundFile}");
-
+        if (string.IsNullOrWhiteSpace(reactionImgRaw)) reactionImgRaw = "";
+        else if (!IsAllowedAsset(reactionImgRaw)) reactionImgRaw = "";
+        GameState.ReactionImage = reactionImgRaw; NotifyStateChanged();
+        if (!string.IsNullOrWhiteSpace(choice.SoundFile)) _ = _js.InvokeVoidAsync("JanuszAudio.playVoice", $"sounds/{choice.SoundFile}");
         if (!string.IsNullOrWhiteSpace(GameState.ReactionText) ||!string.IsNullOrWhiteSpace(GameState.ReactionImage))
         {
             _reactionCts = new CancellationTokenSource();
             try { await Task.Delay(5000, _reactionCts.Token); } catch (TaskCanceledException) { } finally { HideReaction(); }
         }
-
-        // FIX KLUCZOWY: END_DAY
         if (!string.IsNullOrWhiteSpace(choice.Next))
         {
             if (choice.Next == "END_DAY")
             {
                 var endScene = GameState.CurrentScene;
-                var nextDay = endScene?.NextDayId?? endScene?.NextDay?? "day2";
-                Console.WriteLine($"[Game] END_DAY -> ładuję {nextDay}");
-                await LoadDay(nextDay);
-                return;
+                var nextDay = endScene?.NextDayId?? endScene?.NextDay?? "";
+                if (string.IsNullOrWhiteSpace(nextDay)) { Console.WriteLine("[Game] END_DAY bez NextDay - koniec gry"); GameState.IsFinished = true; NotifyStateChanged(); return; }
+                Console.WriteLine($"[Game] END_DAY -> ładuję {nextDay}"); await LoadDay(nextDay); return;
             }
             LoadScene(choice.Next);
         }
@@ -301,29 +262,18 @@ public class GameEngine
 
     private void ApplyChoiceEffects(Choice choice)
     {
-        foreach (var kv in choice.Stats)
-        {
-            var key = NormalizeStatId(kv.Key);
-            var cur = GameState.Stats.Get(key);
-            GameState.Stats.Set(key, cur + kv.Value);
-        }
+        foreach (var kv in choice.Stats) { var key = NormalizeStatId(kv.Key); GameState.Stats.Set(key, GameState.Stats.Get(key) + kv.Value); }
         if (choice.Cebula!= 0) GameState.Stats.Set("CEBULA", GameState.Stats.Get("CEBULA") + choice.Cebula);
         if (choice.Wstyd!= 0) GameState.Stats.Set("WSTYD", GameState.Stats.Get("WSTYD") + choice.Wstyd);
         if (choice.Portfel!= 0) GameState.Stats.Set("PORTFEL", GameState.Stats.Get("PORTFEL") + choice.Portfel);
         if (choice.Reputacja!= 0) GameState.Stats.Set("REPUTACJA", GameState.Stats.Get("REPUTACJA") + choice.Reputacja);
-        if (choice.KosztPortfel.HasValue)
-            GameState.Stats.Set("PORTFEL", GameState.Stats.Get("PORTFEL") - choice.KosztPortfel.Value);
-
-        foreach (var flag in choice.FlagsSet)
-            GameState.Flags.Add(flag);
-
+        if (choice.KosztPortfel.HasValue) GameState.Stats.Set("PORTFEL", GameState.Stats.Get("PORTFEL") - choice.KosztPortfel.Value);
+        foreach (var flag in choice.FlagsSet) GameState.Flags.Add(flag);
         foreach (var key in GameState.Stats.Values.Keys.ToList())
         {
             var v = GameState.Stats.Values[key];
-            if (key == "CEBULA" || key == "WSTYD" || key == "REPUTACJA")
-                GameState.Stats.Values[key] = Math.Clamp(v, 0, 100);
-            else if (key == "PORTFEL")
-                GameState.Stats.Values[key] = Math.Max(0, v);
+            if (key == "CEBULA" || key == "WSTYD" || key == "REPUTACJA") GameState.Stats.Values[key] = Math.Clamp(v, 0, 100);
+            else if (key == "PORTFEL") GameState.Stats.Values[key] = Math.Max(0, v);
         }
     }
 
@@ -350,7 +300,7 @@ public class GameEngine
             }
             if (matches && IsAllowedAsset(rule.Use)) { GameState.JanuszImage = rule.Use; return; }
         }
-        GameState.JanuszImage = _avatarSystem.Default;
+        GameState.JanuszImage = _avatarSystem.Default?? "";
     }
 
     private void NotifyStateChanged() => StateChanged?.Invoke();
