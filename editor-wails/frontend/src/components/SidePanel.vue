@@ -4,7 +4,7 @@ import { useProjectStore } from '../stores/projectStore'
 import {
   SelectImageFile, ImportAsset, GetImageBase64, DeleteAsset,
   SelectAudioFile, ImportAudioAsset, ListAudioAssets, DeleteAudioAsset,
-  SetProjectPath
+  SetProjectPath, DeleteFile
 } from '../../wailsjs/go/main/App'
 
 const store = useProjectStore()
@@ -26,6 +26,17 @@ const musicAssets = ref<string[]>([])
 
 function norm(p: string) {
   return (p || '').replace(/\\/g, '/').trim()
+}
+
+function toSafeDayId(raw: string): string {
+  // dowolna nazwa od użytkownika -> bezpieczny id pliku
+  // np. "Wesele u Basi!!" -> "wesele_u_basi"
+  let s = raw.trim().toLowerCase()
+  s = s.replace(/\s+/g, '_')
+  s = s.replace(/[^a-z0-9_\-]/g, '')
+  s = s.replace(/_+/g, '_').replace(/-+/g, '-')
+  s = s.replace(/^_+|_+$/g, '')
+  return s.slice(0, 40)
 }
 
 async function refreshAssets() {
@@ -121,24 +132,90 @@ async function deleteAudioAsset(asset: string) {
 }
 
 function toggleSection(t: 'bg'|'re'|'av'|'sfx'|'vo'|'mu') { (sectionsOpen.value as any)[t] =!(sectionsOpen.value as any)[t] }
+
 function selectDay(day: string) {
   store.currentDay = day
   store.currentSceneId = store.days[day]?.[0]?.Id || null
 }
+
+// === DOWOLNE NAZWY DNI - FIX ===
 function handleAddDay() {
-  const base = `day${(store.dayFileList?.length?? 0) + 1}`
-  const name = prompt('Nazwa nowego dnia? (np. day2)', base)
-  if (!name) return
-  const id = name.trim().toLowerCase().replace(/\s+/g,'_')
-  if (!id) return
+  const raw = prompt('Nazwa nowego dnia? np. wesele_u_basi, prolog, final', `dzien_${Object.keys(store.days).length+1}`)
+  if (!raw) return
+  const id = toSafeDayId(raw)
+  if (!id) { alert('Nieprawidłowa nazwa'); return }
+  if (id.length < 2) { alert('Min 2 znaki'); return }
+  if ((store as any).days[id]) { alert(`Dzień "${id}" już istnieje!`); return }
   store.addDay(id)
   store.saveProject()
 }
+
 async function handleDeleteDay(e: Event, day: string) {
   e.stopPropagation()
   if ((store.dayFileList?.length?? 0) <= 1) { alert('Musisz zostawić minimum 1 dzień!'); return }
-  if (!confirm(`Na pewno usunąć dzień "${day}"?`)) return
+  if (!confirm(`Na pewno usunąć dzień "${day}"? Plik Data/${day}.json zostanie skasowany.`)) return
   await store.deleteDay(day)
+  await store.saveProject()
+}
+
+async function handleRenameDay(e: Event, oldId: string) {
+  e.stopPropagation()
+  const raw = prompt(`Zmień nazwę dnia "${oldId}" na:`, oldId)
+  if (!raw) return
+  const newId = toSafeDayId(raw)
+  if (!newId) { alert('Nieprawidłowa nazwa'); return }
+  if (newId === oldId) return
+  if ((store as any).days[newId]) { alert(`Dzień "${newId}" już istnieje!`); return }
+
+  if (!confirm(`Przemianować "${oldId}" -> "${newId}"?\nZaktualizuję wszystkie NextDayId.`)) return
+
+  // 1. Skopiuj dane
+  const scenes = (store as any).days[oldId]
+  if (!scenes) return
+  // zaktualizuj NextDayId w scenach które wskazywały na stary dzień
+  Object.values((store as any).days).forEach((scList: any) => {
+    (scList as any[]).forEach((s: any) => {
+      if (s.NextDayId === oldId) s.NextDayId = newId
+      if (s.NextDay === oldId) s.NextDay = newId
+      if (s.Transfers?.nextDay === oldId) s.Transfers.nextDay = newId
+    })
+  })
+  // zaktualizuj startDay w meta
+  if ((store as any).meta?.startDay === oldId) (store as any).meta.startDay = newId
+
+  (store as any).days[newId] = scenes
+  delete (store as any).days[oldId]
+
+  if (store.currentDay === oldId) store.currentDay = newId
+
+  // 2. Skasuj stary plik
+  if (store.projectPath) {
+    try { await DeleteFile(store.projectPath, `Data/${oldId}.json`) } catch {}
+  }
+  await store.saveProject()
+}
+
+async function handleDuplicateDay(e: Event, srcId: string) {
+  e.stopPropagation()
+  const base = `${srcId}_kopia`
+  let newId = base
+  let c = 2
+  while ((store as any).days[newId]) newId = `${base}_${c++}`
+
+  const raw = prompt(`Duplikuj "${srcId}" jako:`, newId)
+  if (!raw) return
+  const id = toSafeDayId(raw)
+  if (!id) return
+  if ((store as any).days[id]) { alert(`Dzień "${id}" już istnieje!`); return }
+
+  const cloned = JSON.parse(JSON.stringify((store as any).days[srcId]))
+  // nowe Day number
+  const dayNum = Object.keys((store as any).days).length + 1
+  cloned.forEach((s: any) => { s.Day = dayNum })
+
+  ;(store as any).days[id] = cloned
+  store.currentDay = id
+  store.currentSceneId = cloned[0]?.Id || null
   await store.saveProject()
 }
 
@@ -156,7 +233,6 @@ watch(() => store.projectPath, async (newPath) => {
   await refreshAssets()
 })
 
-// po zamknięciu edytora Janusza odśwież listę avatarów
 watch(() => store.ui.showAvatarEditor, async (open) => {
   if (!open) {
     await refreshAssets()
@@ -174,37 +250,50 @@ watch(() => store.ui.showAvatarEditor, async (open) => {
           <span class="icon">🧠</span>
           <span class="text">
             <b>KONFIGURUJ JANUSZA</b>
-            <small> rules • {{ avatarCount }} avatars</small>
+            <small>{{ avatarRulesCount }} rules • {{ avatarCount }} avatars</small>
           </span>
         </button>
       </div>
 
-      <div class="panel-section">
-        <div class="section-header"><h4>ASSETY</h4></div>
-          <div class="asset-buttons">
-            <button @click="importAsset('bg')" class="btn-asset">+ Tło</button>
-            <button @click="importAsset('re')" class="btn-asset">+ Reakcja</button>
-            <button @click="handleAddDay" class="btn-asset">+ Dzień</button>
-            <button @click="importAudio('sfx')" class="btn-asset">+ Dźwięk</button>
-            <button @click="importAudio('voice')" class="btn-asset">+ Narrator</button>
-            <button @click="importAudio('music')" class="btn-asset">+ Muzyka</button>
-          </div>
-        <div class="asset-count">Łącznie: {{ totalFiles }} plików</div>
-      </div>
-
       <div class="panel-section days-section">
-        <div class="section-header"><h4>DNI [{{ store.dayFileList?.length?? 0 }}]</h4></div>
-        <div v-for="day in (store.dayFileList?? [])" :key="day" :class="['day-item', { active: day === store.currentDay }]" @click="selectDay(day)">
-          <span>📁 {{ day }}</span>
-          <div class="day-right"><span class="badge">{{ store.days[day]?.length?? 0 }}</span><button @click="handleDeleteDay($event, day)" class="btn-del">✕</button></div>
+        <div class="section-header">
+          <h4>DNI [{{ store.dayFileList?.length?? 0 }}]</h4>
+          <button @click="handleAddDay" class="btn-add-day">+ Dzień</button>
         </div>
+        <div class="days-list">
+          <div v-for="day in (store as any).daysList" :key="day" :class="['day-item', { active: store.currentDay === day }]" @click="selectDay(day)">
+            <div class="day-left">
+              <span class="day-name">{{ day }}</span>
+              <span class="day-count">{{ (store as any).days[day]?.length?? 0 }}</span>
+            </div>
+            <div class="day-right">
+              <button class="btn-mini" title="Duplikuj" @click="handleDuplicateDay($event, day)">⎘</button>
+              <button class="btn-mini" title="Zmień nazwę" @click="handleRenameDay($event, day)">✎</button>
+              <button class="btn-mini del" title="Usuń" @click="handleDeleteDay($event, day)">✕</button>
+            </div>
+          </div>
+          <div v-if="!(store as any).daysList?.length" class="empty">Brak dni</div>
+        </div>
+        <div class="hint">Nazwy dowolne: wesele, prolog, final_boss. Bez spacji - zamienią się na _</div>
       </div>
 
-      <div class="panel-section assets-section">
+      <div class="panel-section">
+        <div class="label">ASSETY [{{ totalFiles }}]</div>
+        <div class="asset-buttons">
+          <button @click="importAsset('bg')" class="btn-asset">+ BG</button>
+          <button @click="importAsset('re')" class="btn-asset">+ RE</button>
+          <button @click="refreshAssets" class="btn-asset">↻ Odśwież</button>
+        </div>
+        <div class="asset-buttons" style="margin-top:6px">
+          <button @click="importAudio('sfx')" class="btn-asset">+ SFX</button>
+          <button @click="importAudio('voice')" class="btn-asset">+ VOICE</button>
+          <button @click="importAudio('music')" class="btn-asset">+ MUSIC</button>
+        </div>
+
         <div class="asset-category">
           <div class="category-header" @click="toggleSection('bg')"><span class="arrow">{{ sectionsOpen.bg? '▼':'▶' }}</span><span>TŁA</span><span class="count">[{{ backgroundAssets.length }}]</span></div>
           <div v-if="sectionsOpen.bg" class="asset-list">
-            <div v-for="a in backgroundAssets" :key="a" class="asset-item"><img v-if="getAssetUrl(a)" :src="getAssetUrl(a)" /><div v-else class="thumb-placeholder"></div><span class="name">{{ norm(a).replace('images/bg_','').replace('images/','') }}</span><button @click.stop="deleteAsset(a)" class="btn-del">✕</button></div>
+            <div v-for="a in backgroundAssets" :key="a" class="asset-item"><img v-if="getAssetUrl(a)" :src="getAssetUrl(a)" /><div v-else class="thumb-placeholder"></div><span class="name">{{ norm(a).replace('images/','') }}</span><button @click.stop="deleteAsset(a)" class="btn-del">✕</button></div>
             <div v-if="!backgroundAssets.length" class="empty">Brak teł</div>
           </div>
         </div>
@@ -212,7 +301,7 @@ watch(() => store.ui.showAvatarEditor, async (open) => {
         <div class="asset-category">
           <div class="category-header" @click="toggleSection('re')"><span class="arrow">{{ sectionsOpen.re? '▼':'▶' }}</span><span>REAKCJE</span><span class="count">[{{ reactionAssets.length }}]</span></div>
           <div v-if="sectionsOpen.re" class="asset-list">
-            <div v-for="a in reactionAssets" :key="a" class="asset-item"><img v-if="getAssetUrl(a)" :src="getAssetUrl(a)" /><div v-else class="thumb-placeholder"></div><span class="name">{{ norm(a).replace('images/re_','').replace('images/','') }}</span><button @click.stop="deleteAsset(a)" class="btn-del">✕</button></div>
+            <div v-for="a in reactionAssets" :key="a" class="asset-item"><img v-if="getAssetUrl(a)" :src="getAssetUrl(a)" /><div v-else class="thumb-placeholder"></div><span class="name">{{ norm(a).replace('images/','') }}</span><button @click.stop="deleteAsset(a)" class="btn-del">✕</button></div>
             <div v-if="!reactionAssets.length" class="empty">Brak reakcji</div>
           </div>
         </div>
@@ -279,17 +368,23 @@ watch(() => store.ui.showAvatarEditor, async (open) => {
 .label{font-size:10px;font-weight:700;letter-spacing:1px;color:#7D8590}
 .project-name{font-size:12px;font-family:monospace;color:#E6EDF3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .btn-janusz{margin-top:6px;width:100%;display:flex;gap:10px;align-items:center;background:#161B22;border:1px solid #00FF94;border-radius:6px;padding:10px 12px;color:#E6EDF3;cursor:pointer;text-align:left;box-sizing:border-box}
-.btn-janusz.icon{font-size:18px;flex:0 0 18px;line-height:1}
-.btn-janusz.text{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;line-height:1.15}
-.btn-janusz.text b{display:block;font-size:11px;letter-spacing:.4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.btn-janusz.text small{display:block;font-size:10px;color:#7D8590;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:400}
 .btn-janusz:hover{background:#1a2e25}
 .days-section{padding-bottom:8px;border-bottom:1px solid #21262D}
+.section-header{display:flex;justify-content:space-between;align-items:center}
 .section-header h4{margin:0;font-size:11px;color:#00FF94;letter-spacing:1px}
+.btn-add-day{background:#21262D;border:1px solid #30363D;color:#E6EDF3;padding:4px 8px;border-radius:4px;font-size:10px;cursor:pointer;font-weight:700}
+.btn-add-day:hover{border-color:#00FF94;color:#00FF94}
+.days-list{display:flex;flex-direction:column;gap:4px;margin-top:6px}
 .day-item{display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:#161B22;border-radius:4px;font-size:12px;cursor:pointer;border-left:2px solid transparent;gap:8px;flex-shrink:0}
 .day-item:hover{border-left-color:#00FF94}.day-item.active{background:#1a2e25;border-left-color:#00FF94}
-.day-right{display:flex;align-items:center;gap:6px}
-.badge{background:#000;padding:1px 6px;border-radius:10px;font-size:10px;color:#7D8590}
+.day-left{display:flex;align-items:center;gap:6px;min-width:0}
+.day-name{font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.day-count{background:#000;padding:1px 6px;border-radius:10px;font-size:10px;color:#7D8590;flex:0 0 auto}
+.day-right{display:flex;align-items:center;gap:2px;flex:0 0 auto}
+.btn-mini{width:20px;height:20px;background:#21262D;border:1px solid #30363D;color:#7D8590;border-radius:3px;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center}
+.btn-mini:hover{background:#30363D;color:#E6EDF3}
+.btn-mini.del:hover{background:#3a1212;border-color:#7f1d1d;color:#fca5a5}
+.hint{font-size:9px;color:#484F58;margin-top:4px;font-style:italic}
 .asset-buttons{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
 .btn-asset{height:34px;background:#21262D;border:1px solid #30363D;color:#cbd5e1;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .btn-asset:hover{border-color:#8B949E;color:white;background:#30363D}
@@ -302,7 +397,7 @@ watch(() => store.ui.showAvatarEditor, async (open) => {
 .asset-item{display:flex;align-items:center;gap:6px;background:#161B22;border-radius:4px;padding:4px;flex-shrink:0}
 .asset-item img{width:28px;height:28px;object-fit:cover;border-radius:3px;flex-shrink:0}
 .thumb-placeholder{width:28px;height:28px;background:#21262D;border-radius:3px;flex-shrink:0}
-.audio-item.audio-icon{width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:#21262D;border-radius:3px;font-size:12px;flex-shrink:0}
+.audio-item .audio-icon{width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:#21262D;border-radius:3px;font-size:12px;flex-shrink:0}
 .name{flex:1;font-size:10px;font-family:monospace;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .btn-del{width:18px;height:18px;flex:0 0 18px;background:#dc2626;color:white;border:0;border-radius:3px;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;line-height:1}
 .btn-del:hover{background:#ef4444}

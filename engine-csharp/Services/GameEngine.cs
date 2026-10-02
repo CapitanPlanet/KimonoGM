@@ -15,6 +15,9 @@ public class GameEngine
     private AvatarSystem _avatarSystem = new();
     private readonly string[] _allowedPrefixes = { "av_", "bg_", "re_" };
     private string _currentDayId = "day1";
+    private ProjectManifest? _projectManifest;
+    private List<string> _allDayIds = new() { "day1" };
+    private HashSet<string> _loadedDays = new();
 
     public event Action? StateChanged;
 
@@ -46,6 +49,7 @@ public class GameEngine
         public string gameName { get; set; } = "";
         public string startDay { get; set; } = "day1";
         public string startScene { get; set; } = "start";
+        public List<string> days { get; set; } = new();
         public AvatarSystem avatarSystem { get; set; } = new();
         public StatsSystem statsSystem { get; set; } = new();
     }
@@ -84,10 +88,11 @@ public class GameEngine
     public async Task LoadGame()
     {
         GameState.AllScenes = new List<Scene>();
+        _loadedDays.Clear();
         _currentDayId = "day1";
         ProjectManifest? project = null;
 
-        // 1. LOAD project.janproj - TWOJE staty QQQQ, WWW itp
+        // 1. LOAD project.janproj
         try
         {
             var respProj = await _http.GetAsync("data/project.janproj");
@@ -98,31 +103,49 @@ public class GameEngine
             }
             else
             {
-                // fallback - szukaj w root
                 var resp2 = await _http.GetAsync("project.janproj");
                 if (resp2.IsSuccessStatusCode) project = await resp2.Content.ReadFromJsonAsync<ProjectManifest>();
             }
         }
         catch (Exception ex) { Console.WriteLine($"[Game] brak project.janproj: {ex.Message}"); }
 
-        // 2. STATY Z PROJEKTU - bez hardcoda
-        if (project?.statsSystem?.stats!= null && project.statsSystem.stats.Any())
+        // manifest z edytora
+        try
+        {
+            var man = await _http.GetFromJsonAsync<ManifestFile>("data/_manifest.json");
+            if (man != null && man.days.Any())
+            {
+                _allDayIds = man.days;
+                Console.WriteLine($"[Game] manifest.json: days=[{string.Join(",", _allDayIds)}] start={man.startDay}/{man.startScene}");
+                if (project == null) project = new ProjectManifest();
+                project.startDay = man.startDay ?? project.startDay;
+                project.startScene = man.startScene ?? project.startScene;
+                project.days = man.days;
+            }
+        }
+        catch (Exception ex) { Console.WriteLine($"[Game] brak manifest.json: {ex.Message}"); }
+
+        _projectManifest = project;
+        if (project?.days != null && project.days.Any()) _allDayIds = project.days;
+
+        // 2. STATY
+        if (project?.statsSystem?.stats != null && project.statsSystem.stats.Any())
         {
             GameState.StatDefs = project.statsSystem.stats.Select(s => new StatDef
             {
-                id = NormalizeStatId(s.id), // klucz normalizowany do lookupu
-                name = string.IsNullOrWhiteSpace(s.name)? s.id : s.name, // nazwa oryginalna QQQQ
+                id = NormalizeStatId(s.id),
+                name = string.IsNullOrWhiteSpace(s.name) ? s.id : s.name,
                 initial = s.initial
             }).ToList();
-            Console.WriteLine($"[Game] Staty z projektu: {string.Join(",", GameState.StatDefs.Select(s=>s.name))}");
+            Console.WriteLine($"[Game] Staty z projektu: {string.Join(",", GameState.StatDefs.Select(s => s.name))}");
         }
 
-        // 3. AVATAR Z PROJEKTU
-        if (project?.avatarSystem!= null)
+        // 3. AVATAR
+        if (project?.avatarSystem != null)
         {
             var def = project.avatarSystem.Default;
             var filteredRules = project.avatarSystem.Rules.Where(r => IsAllowedAsset(r.Use)).ToList();
-            _avatarSystem = new AvatarSystem { Default = IsAllowedAsset(def)? def : def?? "", Rules = filteredRules };
+            _avatarSystem = new AvatarSystem { Default = IsAllowedAsset(def) ? def : def ?? "", Rules = filteredRules };
             Console.WriteLine($"[Avatar] z project.janproj: default={_avatarSystem.Default} regul={filteredRules.Count}");
         }
         else
@@ -130,16 +153,17 @@ public class GameEngine
             _avatarSystem = new AvatarSystem { Default = "", Rules = new() };
         }
 
-        _currentDayId = project?.startDay?? "day1";
-        var startSceneId = project?.startScene?? "start";
+        _currentDayId = project?.startDay ?? "day1";
+        var startSceneId = project?.startScene ?? "start";
 
         try
         {
             Console.WriteLine($"[Game] Probuje ladowac data/{_currentDayId}.json");
             var day1 = await _http.GetFromJsonAsync<List<Scene>>($"data/{_currentDayId}.json");
-            if (day1!= null && day1.Any())
+            if (day1 != null && day1.Any())
             {
                 GameState.AllScenes.AddRange(day1);
+                _loadedDays.Add(_currentDayId);
                 Console.WriteLine($"[Game] Zaladowano {day1.Count} scen z {_currentDayId}.json");
             }
         }
@@ -148,10 +172,10 @@ public class GameEngine
             Console.WriteLine($"[Game] Nie udalo sie zaladowac {_currentDayId}.json: {ex.Message}");
             try
             {
-                var data = await _http.GetFromJsonAsync<GameDataWrapper>("data/scenes.json")?? new();
+                var data = await _http.GetFromJsonAsync<GameDataWrapper>("data/scenes.json") ?? new();
                 GameState.AllScenes = data.scenes;
             }
-            catch {}
+            catch { }
         }
 
         GameState.Stats = new DynamicStats();
@@ -163,52 +187,115 @@ public class GameEngine
         {
             GameState.StatDefs = new List<StatDef>
             {
-                new() { id = "CEBULA", name = "CEBULA", initial = 10 },
-                new() { id = "WSTYD", name = "WSTYD", initial = 10 },
-                new() { id = "PORTFEL", name = "PORTFEL", initial = 100 },
-                new() { id = "REPUTACJA", name = "REPUTACJA", initial = 50 },
+                new() { id = "CEBULA", name = "Cebula", initial = 50 },
+                new() { id = "WSTYD", name = "Wstyd", initial = 0 },
             };
         }
-        foreach (var d in GameState.StatDefs) GameState.Stats.Values[NormalizeStatId(d.id)] = d.initial;
+        foreach (var def in GameState.StatDefs) GameState.Stats.Set(def.id, def.initial);
 
-        var targetId = startSceneId;
-        if (!GameState.AllScenes.Any(s => s.Id == targetId))
-            targetId = GameState.AllScenes.FirstOrDefault(s => s.Id == targetId)?.Id
-                   ?? GameState.AllScenes.FirstOrDefault(s => s.Id.StartsWith("start"))?.Id
-                   ?? GameState.AllScenes.FirstOrDefault()?.Id?? "start";
+        if (GameState.AllScenes.Any())
+        {
+            var start = GameState.AllScenes.FirstOrDefault(s => s.Id == startSceneId) ?? GameState.AllScenes.First();
+            Console.WriteLine($"[Game] Start sceny: {start.Id} z {GameState.AllScenes.Count} scen");
+            LoadScene(start.Id);
+        }
+    }
 
-        Console.WriteLine($"[Game] Start sceny: {targetId} z {GameState.AllScenes.Count} scen");
-        LoadScene(targetId);
+    public class ManifestFile
+    {
+        public List<string> days { get; set; } = new();
+        public string startDay { get; set; } = "day1";
+        public string startScene { get; set; } = "start";
+        public string version { get; set; } = "";
     }
 
     public async Task LoadDay(string dayId)
     {
-        if (string.IsNullOrWhiteSpace(dayId)) dayId = "day1";
-        dayId = dayId.Replace(".json", "").Trim();
-        Console.WriteLine($"[Game] Ładuję dzień: {dayId}");
+        if (string.IsNullOrWhiteSpace(dayId) || dayId == "END") return;
+        if (_loadedDays.Contains(dayId))
+        {
+            _currentDayId = dayId;
+            Console.WriteLine($"[Game] Dzień {dayId} już załadowany, przełączam");
+            return;
+        }
         try
         {
+            Console.WriteLine($"[Game] Ładuję dzień {dayId}.json");
             var scenes = await _http.GetFromJsonAsync<List<Scene>>($"data/{dayId}.json");
-            if (scenes!= null && scenes.Any())
+            if (scenes != null && scenes.Any())
             {
                 _currentDayId = dayId;
-                GameState.AllScenes = scenes;
-                var start = scenes.FirstOrDefault(s => s.Id.StartsWith("start"))?.Id?? scenes.First().Id;
+                // DODAJEMY a nie nadpisujemy - żeby wsteczne skoki działały
+                foreach (var s in scenes)
+                {
+                    if (!GameState.AllScenes.Any(x => x.Id == s.Id)) GameState.AllScenes.Add(s);
+                    else
+                    {
+                        var idx = GameState.AllScenes.FindIndex(x => x.Id == s.Id);
+                        GameState.AllScenes[idx] = s;
+                    }
+                }
+                _loadedDays.Add(dayId);
+                Console.WriteLine($"[Game] Załadowano {scenes.Count} scen z {dayId}. Razem {GameState.AllScenes.Count}");
+                var start = scenes.FirstOrDefault(s => s.Id.StartsWith("start"))?.Id ?? scenes.First().Id;
                 LoadScene(start);
             }
         }
         catch (Exception ex) { Console.WriteLine($"[Game] Nie udało się załadować {dayId}: {ex.Message}"); }
     }
 
+    // NOWE: znajdź dzień który zawiera scenę
+    private string? FindDayForScene(string sceneId)
+    {
+        // jeśli już załadowana - zwróć null (nie trzeba ładować)
+        if (GameState.AllScenes.Any(s => s.Id == sceneId)) return null;
+        // przeszukaj manifest - wszystkie dni jeszcze niezaładowane
+        // ale nie wiemy który dzień ma tę scenę bez ładowania, więc próbujemy wszystkie
+        return null;
+    }
+
+    private async Task<bool> EnsureSceneLoaded(string sceneId)
+    {
+        if (GameState.AllScenes.Any(s => s.Id == sceneId)) return true;
+        Console.WriteLine($"[Game] Scena {sceneId} nie w pamięci, próbuję załadować pozostałe dni: {string.Join(",", _allDayIds.Where(d => !_loadedDays.Contains(d)))}");
+        foreach (var dayId in _allDayIds.Where(d => !_loadedDays.Contains(d)))
+        {
+            try
+            {
+                var scenes = await _http.GetFromJsonAsync<List<Scene>>($"data/{dayId}.json");
+                if (scenes == null) continue;
+                foreach (var s in scenes)
+                {
+                    if (!GameState.AllScenes.Any(x => x.Id == s.Id)) GameState.AllScenes.Add(s);
+                }
+                _loadedDays.Add(dayId);
+                Console.WriteLine($"[Game] Doładowałem {dayId}: {scenes.Count} scen, razem {GameState.AllScenes.Count}");
+                if (GameState.AllScenes.Any(s => s.Id == sceneId)) return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Game] Nie udało się doładować {dayId}: {ex.Message}");
+            }
+        }
+        return GameState.AllScenes.Any(s => s.Id == sceneId);
+    }
+
     public void LoadScene(string sceneId)
     {
         if (sceneId == "END_DAY") return;
+        if (sceneId == "END")
+        {
+            GameState.IsFinished = true;
+            Console.WriteLine("[Game] END - koniec gry");
+            NotifyStateChanged();
+            return;
+        }
         GameState.CurrentScene = GameState.AllScenes.FirstOrDefault(s => s.Id == sceneId);
-        if (GameState.CurrentScene == null) { Console.WriteLine($"[Game] Nie znaleziono sceny {sceneId}"); return; }
+        if (GameState.CurrentScene == null) { Console.WriteLine($"[Game] Nie znaleziono sceny {sceneId} w {GameState.AllScenes.Count} załadowanych. Dni załadowane: {string.Join(",", _loadedDays)}"); return; }
         GameState.BackgroundImage = NormalizeBg(GameState.CurrentScene.Background);
-        GameState.SceneTitle = GameState.CurrentScene.SceneTitle?? "";
-        GameState.NarrationText = GameState.CurrentScene.Text?? "";
-        GameState.CurrentChoices = GameState.CurrentScene.Choices?? new List<Choice>();
+        GameState.SceneTitle = GameState.CurrentScene.SceneTitle ?? "";
+        GameState.NarrationText = GameState.CurrentScene.Text ?? "";
+        GameState.CurrentChoices = GameState.CurrentScene.Choices ?? new List<Choice>();
         GameState.ReactionText = ""; GameState.ReactionImage = "";
         GameState.IsFinished = GameState.CurrentChoices.Count == 0;
         UpdateAvatar(); NotifyStateChanged();
@@ -216,7 +303,7 @@ public class GameEngine
 
     public bool CanSelectChoice(Choice choice)
     {
-        if (choice.FlagsRequired.Any() &&!choice.FlagsRequired.All(f => GameState.Flags.Contains(f))) return false;
+        if (choice.FlagsRequired.Any() && !choice.FlagsRequired.All(f => GameState.Flags.Contains(f))) return false;
         foreach (var kv in choice.MinStats) if (GameState.Stats.Get(NormalizeStatId(kv.Key)) < kv.Value) return false;
         foreach (var kv in choice.MaxStats) if (GameState.Stats.Get(NormalizeStatId(kv.Key)) > kv.Value) return false;
         if (choice.KosztPortfel.HasValue && GameState.Stats.Get("PORTFEL") < choice.KosztPortfel.Value) return false;
@@ -224,38 +311,69 @@ public class GameEngine
     }
 
     public IEnumerable<Choice> GetAvailableChoices()
-        => GameState.CurrentChoices?.Where(c => CanSelectChoice(c))?? Enumerable.Empty<Choice>();
+        => GameState.CurrentChoices?.Where(c => CanSelectChoice(c)) ?? Enumerable.Empty<Choice>();
 
     public async Task MakeChoice(Choice choice)
     {
         if (!CanSelectChoice(choice))
         {
-            GameState.ReactionText = string.IsNullOrWhiteSpace(choice.FailText)? "Nie możesz tego zrobić, Janusz." : choice.FailText;
+            GameState.ReactionText = string.IsNullOrWhiteSpace(choice.FailText) ? "Nie możesz tego zrobić, Janusz." : choice.FailText;
             GameState.ReactionImage = ""; NotifyStateChanged();
             await Task.Delay(5000); GameState.ReactionText = ""; GameState.ReactionImage = ""; NotifyStateChanged(); return;
         }
-        if (!_musicStarted) { _musicStarted = true; try { await _js.InvokeVoidAsync("JanuszAudio.startMusic", "sounds/s1.mp3"); } catch {} }
+        if (!_musicStarted) { _musicStarted = true; try { await _js.InvokeVoidAsync("JanuszAudio.startMusic", "sounds/s1.mp3"); } catch { } }
         _reactionCts?.Cancel(); ApplyChoiceEffects(choice);
-        GameState.ReactionText = string.IsNullOrWhiteSpace(choice.ReactionText)? "" : choice.ReactionText;
+        GameState.ReactionText = string.IsNullOrWhiteSpace(choice.ReactionText) ? "" : choice.ReactionText;
         var reactionImgRaw = choice.ReactionImage;
         if (string.IsNullOrWhiteSpace(reactionImgRaw)) reactionImgRaw = "";
         else if (!IsAllowedAsset(reactionImgRaw)) reactionImgRaw = "";
         GameState.ReactionImage = reactionImgRaw; NotifyStateChanged();
         if (!string.IsNullOrWhiteSpace(choice.SoundFile)) _ = _js.InvokeVoidAsync("JanuszAudio.playVoice", $"sounds/{choice.SoundFile}");
-        if (!string.IsNullOrWhiteSpace(GameState.ReactionText) ||!string.IsNullOrWhiteSpace(GameState.ReactionImage))
+        if (!string.IsNullOrWhiteSpace(GameState.ReactionText) || !string.IsNullOrWhiteSpace(GameState.ReactionImage))
         {
             _reactionCts = new CancellationTokenSource();
             try { await Task.Delay(5000, _reactionCts.Token); } catch (TaskCanceledException) { } finally { HideReaction(); }
         }
         if (!string.IsNullOrWhiteSpace(choice.Next))
         {
+            // FIX 1: END_DAY stary system
             if (choice.Next == "END_DAY")
             {
                 var endScene = GameState.CurrentScene;
-                var nextDay = endScene?.NextDayId?? endScene?.NextDay?? "";
-                if (string.IsNullOrWhiteSpace(nextDay)) { Console.WriteLine("[Game] END_DAY bez NextDay - koniec gry"); GameState.IsFinished = true; NotifyStateChanged(); return; }
+                var nextDay = endScene?.NextDayId ?? endScene?.NextDay ?? "";
+                if (string.IsNullOrWhiteSpace(nextDay) || nextDay == "END") { Console.WriteLine("[Game] END_DAY bez NextDay - koniec gry"); GameState.IsFinished = true; NotifyStateChanged(); return; }
                 Console.WriteLine($"[Game] END_DAY -> ładuję {nextDay}"); await LoadDay(nextDay); return;
             }
+
+            // FIX 2: END - koniec gry
+            if (choice.Next == "END")
+            {
+                Console.WriteLine("[Game] END - koniec gry"); GameState.IsFinished = true; NotifyStateChanged(); return;
+            }
+
+            // FIX 3: jeśli to koniec dnia (IsEndDay) i ma NextDayId, załaduj dzień przed przejściem
+            if (GameState.CurrentScene?.IsEndDay == true || GameState.CurrentScene?.Type == "end_of_day")
+            {
+                var nextDay = GameState.CurrentScene?.NextDayId ?? GameState.CurrentScene?.NextDay;
+                if (!string.IsNullOrWhiteSpace(nextDay) && nextDay != "END" && !_loadedDays.Contains(nextDay))
+                {
+                    Console.WriteLine($"[Game] Koniec dnia {_currentDayId} -> ładuję {nextDay} przed {choice.Next}");
+                    await LoadDay(nextDay);
+                    // LoadDay już zrobi LoadScene(start), ale jeśli choice.Next jest inny niż start, nadpiszemy niżej
+                }
+            }
+
+            // FIX 4: jeśli scena docelowa nie jest załadowana, spróbuj załadować wszystkie pozostałe dni
+            if (!GameState.AllScenes.Any(s => s.Id == choice.Next))
+            {
+                var loaded = await EnsureSceneLoaded(choice.Next);
+                if (!loaded)
+                {
+                    Console.WriteLine($"[Game] Nadal nie znaleziono sceny {choice.Next} po doładowaniu wszystkich dni");
+                    return;
+                }
+            }
+
             LoadScene(choice.Next);
         }
     }
@@ -263,10 +381,10 @@ public class GameEngine
     private void ApplyChoiceEffects(Choice choice)
     {
         foreach (var kv in choice.Stats) { var key = NormalizeStatId(kv.Key); GameState.Stats.Set(key, GameState.Stats.Get(key) + kv.Value); }
-        if (choice.Cebula!= 0) GameState.Stats.Set("CEBULA", GameState.Stats.Get("CEBULA") + choice.Cebula);
-        if (choice.Wstyd!= 0) GameState.Stats.Set("WSTYD", GameState.Stats.Get("WSTYD") + choice.Wstyd);
-        if (choice.Portfel!= 0) GameState.Stats.Set("PORTFEL", GameState.Stats.Get("PORTFEL") + choice.Portfel);
-        if (choice.Reputacja!= 0) GameState.Stats.Set("REPUTACJA", GameState.Stats.Get("REPUTACJA") + choice.Reputacja);
+        if (choice.Cebula != 0) GameState.Stats.Set("CEBULA", GameState.Stats.Get("CEBULA") + choice.Cebula);
+        if (choice.Wstyd != 0) GameState.Stats.Set("WSTYD", GameState.Stats.Get("WSTYD") + choice.Wstyd);
+        if (choice.Portfel != 0) GameState.Stats.Set("PORTFEL", GameState.Stats.Get("PORTFEL") + choice.Portfel);
+        if (choice.Reputacja != 0) GameState.Stats.Set("REPUTACJA", GameState.Stats.Get("REPUTACJA") + choice.Reputacja);
         if (choice.KosztPortfel.HasValue) GameState.Stats.Set("PORTFEL", GameState.Stats.Get("PORTFEL") - choice.KosztPortfel.Value);
         foreach (var flag in choice.FlagsSet) GameState.Flags.Add(flag);
         foreach (var key in GameState.Stats.Values.Keys.ToList())
@@ -295,12 +413,12 @@ public class GameEngine
                     if (cond.Key == "lte" && currentValue > cond.Value) matches = false;
                     if (cond.Key == "gt" && currentValue <= cond.Value) matches = false;
                     if (cond.Key == "lt" && currentValue >= cond.Value) matches = false;
-                    if (cond.Key == "eq" && currentValue!= cond.Value) matches = false;
+                    if (cond.Key == "eq" && currentValue != cond.Value) matches = false;
                 }
             }
             if (matches && IsAllowedAsset(rule.Use)) { GameState.JanuszImage = rule.Use; return; }
         }
-        GameState.JanuszImage = _avatarSystem.Default?? "";
+        GameState.JanuszImage = _avatarSystem.Default ?? "";
     }
 
     private void NotifyStateChanged() => StateChanged?.Invoke();

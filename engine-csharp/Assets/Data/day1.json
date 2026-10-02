@@ -14,7 +14,7 @@
           "EEEEE": 0,
           "RRRRR": 0
         },
-        "ReactionImage": "",
+        "ReactionImage": "images/re_331429824_1626257154493721_9021905042629626225_n.jpg",
         "SoundFile": ""
       }
     ],
@@ -24,21 +24,32 @@
   {
     "Id": "koniec_dnia_1",
     "SceneTitle": "KONIEC DNIA 1",
-    "Background": "images/bg_tutorial.jpg",
+    "Background": "images/bg_tutorial.webp",
     "Text": "Koniec dnia 1.",
     "IsEndDay": true,
     "Type": "end_of_day",
     "Day": 1,
-    "Choices": [],
+    "Choices": [
+      {
+        "Text": "Zakończ",
+        "Next": "start_d2",
+        "Stats": {},
+        "ReactionText": "",
+        "ReactionImage": "",
+        "SoundFile": ""
+      }
+    ],
     "Transfers": {
       "keep_flags": [],
       "keep_stats": [
-        "QQQQ",
         "WWW",
         "EEEEE",
-        "RRRRR"
+        "RRRRR",
+        "QQQQ"
       ],
-      "summary_text": ""
-    }
+      "summary_text": "mmmmm"
+    },
+    "NextDayId": "day2",
+    "NextDay": "day2"
   }
 ]
