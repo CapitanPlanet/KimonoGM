@@ -1,97 +1,147 @@
-.page {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    height: 100dvh;
-    overflow: hidden;
-    background: #000;
+.page{position:relative;display:flex;flex-direction:column;height:100dvh;overflow:hidden;background:#000}
+main{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;min-height:0}
+.sidebar{display:none!important}
+.top-row{background:#1a1a1a;border-bottom:2px solid #ffd700;justify-content:flex-end;height:40px;display:flex;align-items:center;flex-shrink:0;z-index:200}
+
+/* STAGE */
+::deep article.game-stage{padding:0!important;margin:0!important;width:100%;flex:1;min-height:0;position:relative;overflow:hidden;display:flex;background:#000}
+::deep .stage-wrapper{position:relative;width:100%;height:100%;overflow:hidden;background:#000}
+::deep .bg-layer{position:absolute;inset:0;width:100%;height:100%;object-fit:cover!important;object-position:center top!important;z-index:0;pointer-events:none!important}
+::deep .stage-content{position:relative;z-index:1;width:100%;height:100%;overflow:hidden;pointer-events:none}
+::deep .stage-content > *{pointer-events:auto}
+
+/* === FIX PANEL JANUSZA === */
+::deep .janusz-panel,
+::deep .avatar-panel,
+::deep .left-panel,
+::deep [class*="janusz"],
+::deep [class*="avatar"]{
+  position:absolute!important;
+  left:8px!important; 
+  top:8px!important;
+  width:250px!important;
+  background:rgba(0,0,0,0.9)!important;
+  border:3px solid #8b6f47!important;
+  border-radius:12px!important;
+  padding:10px!important;
+  z-index:50!important;
+  pointer-events:auto!important;
+  touch-action:manipulation!important;
+  overflow:visible!important;
 }
 
-main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    position: relative;
-    min-height: 0;
+/* PRZYCISKI DŹWIĘKU */
+::deep .janusz-panel button,
+::deep .avatar-panel button{
+  pointer-events:auto!important;
+  touch-action:manipulation!important;
+  min-width:48px!important;
+  min-height:48px!important;
+  position:relative!important;
+  z-index:60!important;
 }
 
-.sidebar { display: none !important; }
-
-.top-row {
-    background: #1a1a1a;
-    border-bottom: 2px solid #ffd700;
-    justify-content: flex-end;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    z-index: 200;
+::deep .sound-toggle,
+::deep .audio-toggle{
+  width:64px!important;
+  height:48px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:6px!important;
+  background:rgba(0,0,0,0.6)!important;
+  border:1px solid #ffd700!important;
+  border-radius:8px!important;
 }
 
-/* STAGE MA BYĆ FULL, BEZ PADDINGU BLAZORA */
-::deep article.game-stage {
-    padding: 0 !important;
-    margin: 0 !important;
-    width: 100%;
-    flex: 1;
-    min-height: 0;
-    position: relative;
-    overflow: hidden;
-    display: flex;
-    background: #000;
+/* === SUWAKI - FIX 0px + touch-action === */
+::deep .janusz-panel input[type="range"].volume-slider,
+::deep input[type="range"].volume-slider,
+::deep input[type="range"].sfx-slider,
+::deep input[type="range"]{
+  -webkit-appearance:none!important;
+  appearance:none!important;
+  width:calc(100% - 20px)!important;
+  min-width:180px!important;
+  max-width:100%!important;
+  height:36px!important;
+  flex:0 0 auto!important;
+  display:block!important;
+  background:transparent!important;
+  touch-action:pan-y!important;
+  pointer-events:auto!important;
+  cursor:pointer!important;
+  margin:6px auto!important;
+  padding:0!important;
+  box-sizing:border-box!important;
+  opacity:1!important;
+  visibility:visible!important;
 }
 
-::deep .stage-wrapper {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    background: #000;
+::deep .janusz-panel input[type="range"].volume-slider::-webkit-slider-runnable-track,
+::deep input[type="range"]::-webkit-slider-runnable-track{
+  height:8px!important;
+  background:#111!important;
+  border:1px solid #8b6f47!important;
+  border-radius:4px!important;
 }
 
-::deep .bg-layer {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover !important;
-    object-position: center top !important;
-    z-index: 0;
+::deep .janusz-panel input[type="range"].volume-slider::-webkit-slider-thumb,
+::deep input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none!important;
+  width:32px!important;
+  height:32px!important;
+  margin-top:-13px!important;
+  background:#ffd700!important;
+  border:2px solid #000!important;
+  border-radius:50%!important;
+  cursor:pointer!important;
 }
 
-::deep .stage-content {
-    position: relative;
-    z-index: 1;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
+::deep .janusz-panel input[type="range"].volume-slider::-moz-range-track,
+::deep input[type="range"]::-moz-range-track{
+  height:8px!important;
+  background:#111!important;
+  border:1px solid #8b6f47!important;
+  border-radius:4px!important;
 }
 
-@media (max-width: 640.98px) {
-    .top-row {
-        position: fixed;
-        top: 0; left: 0; right: 0;
-        height: 40px;
-        z-index: 200;
-    }
-    main {
-        margin-top: 40px;
-        height: calc(100dvh - 40px);
-        overflow: hidden;
-    }
-    ::deep article.game-stage {
-        height: 100% !important;
-    }
-    ::deep .bg-layer {
-        object-fit: cover !important;
-    }
+::deep .janusz-panel input[type="range"].volume-slider::-moz-range-thumb,
+::deep input[type="range"]::-moz-range-thumb{
+  width:32px!important;
+  height:32px!important;
+  background:#ffd700!important;
+  border-radius:50%!important;
+  border:2px solid #000!important;
 }
 
-@media (min-width: 641px) {
-    .page { flex-direction: column; }
-    .top-row, article:not(.game-stage) {
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
-    }
+::deep .volume-control,
+::deep .sound-control,
+::deep .audio-controls{
+  min-width:110px!important;
+  width:100%!important;
+  flex:0 0 auto!important;
+  display:flex!important;
+  align-items:center!important;
+  overflow:visible!important;
+}
+
+@media (max-width:640.98px){
+  .top-row{position:fixed;top:0;left:0;right:0;height:44px;z-index:200;overflow:visible!important;flex-wrap:nowrap!important}
+  .top-row > *{flex:0 0 auto!important}
+  main{margin-top:44px;height:calc(100dvh - 44px)}
+  ::deep article.game-stage{height:100%!important}
+  ::deep .janusz-panel{top:50px!important; left:4px!important; transform:scale(0.9); transform-origin:top left}
+  ::deep .janusz-panel button{min-width:56px!important; min-height:56px!important}
+  ::deep .janusz-panel input[type="range"].volume-slider,
+  ::deep input[type="range"].volume-slider{
+    height:44px!important;
+    min-width:160px!important;
+    width:calc(100% - 10px)!important;
+  }
+}
+
+@media (min-width:641px){
+  .page{flex-direction:column}
+  .top-row, article:not(.game-stage){padding-left:1rem!important;padding-right:1rem!important}
 }
