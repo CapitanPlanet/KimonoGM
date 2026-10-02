@@ -174,7 +174,7 @@ watch(() => store.ui.showAvatarEditor, async (open) => {
           <span class="icon">🧠</span>
           <span class="text">
             <b>KONFIGURUJ JANUSZA</b>
-            <small>{{ avatarRulesCount }} rules • {{ avatarCount }} avatars</small>
+            <small> rules • {{ avatarCount }} avatars</small>
           </span>
         </button>
       </div>

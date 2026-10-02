@@ -74,9 +74,7 @@ function isImageOfType(path: string, prefix: 'bg_'|'re_'|'av_'): boolean {
 function fixRelPath(input: string): string {
   if (!input) return ''
   let p = input.replace(/\\/g,'/').trim()
-  // Strip absolute Windows / Unix
   if (p.includes(':') || p.startsWith('/') || p.startsWith('C:')) {
-    // keep only images/... or sounds/... or just filename
     const idxImg = p.toLowerCase().lastIndexOf('images/')
     const idxSnd = p.toLowerCase().lastIndexOf('sounds/')
     if (idxImg >= 0) p = p.substring(idxImg)
@@ -100,7 +98,7 @@ export const useProjectStore = defineStore('project', {
     ui: { showAvatarEditor: false }
   }),
   getters: {
-    isProjectLoaded: (s) => !!s.projectPath,
+    isProjectLoaded: (s) =>!!s.projectPath,
     currentDayScenes: (s) => s.days[s.currentDay] || [],
     currentScene: (s) => {
       const scenes = s.days[s.currentDay] || []
@@ -108,7 +106,6 @@ export const useProjectStore = defineStore('project', {
     },
     sceneIdsInCurrentDay: (s) => (s.days[s.currentDay] || []).map(x => x.Id),
     dayFileList: (s) => Object.keys(s.days),
-    // FIX: filtruj po basename, nie includes
     backgroundAssets: (s) => s.assets.images.filter(a => isImageOfType(a, 'bg_')),
     reactionAssets: (s) => s.assets.images.filter(a => isImageOfType(a, 're_')),
     avatarAssets: (s) => s.assets.images.filter(a => isImageOfType(a, 'av_')),
@@ -129,21 +126,21 @@ export const useProjectStore = defineStore('project', {
       return obj
     },
     ensureStatsSystem() {
-      if (!this.statsSystem || !Array.isArray(this.statsSystem.stats) || !this.statsSystem.stats.length) {
+      if (!this.statsSystem ||!Array.isArray(this.statsSystem.stats) ||!this.statsSystem.stats.length) {
         this.statsSystem = { stats: [...DEFAULT_STATS] }
         return
       }
       const used = new Set<string>()
       const fixed: StatDef[] = []
       for(const s of this.statsSystem.stats){
-        if(!s.name && !s.id) continue
+        if(!s.name &&!s.id) continue
         const finalName = toSafeName((s.name || s.id) as string)
         if(!finalName) continue
         if(used.has(finalName)) continue
         used.add(finalName)
-        fixed.push({ id: finalName, name: finalName, initial: s.initial ?? 0 })
+        fixed.push({ id: finalName, name: finalName, initial: s.initial?? 0 })
       }
-      this.statsSystem.stats = fixed.length ? fixed : [...DEFAULT_STATS]
+      this.statsSystem.stats = fixed.length? fixed : [...DEFAULT_STATS]
     },
     ensureAvatarSystem() {
       this.ensureStatsSystem()
@@ -153,7 +150,6 @@ export const useProjectStore = defineStore('project', {
       if(!this.avatarSystem.default && this.avatarAssets.length > 0){
         this.avatarSystem.default = this.avatarAssets[0]
       }
-      // Fix legacy stat keys in rules
       this.avatarSystem.rules.forEach(r=>{
         if(r.if){
           const newIf: Record<string, ConditionOp> = {}
@@ -172,53 +168,35 @@ export const useProjectStore = defineStore('project', {
       if (!choice.Stats) choice.Stats = {}
       const newStats: Record<string, number> = {}
       for (const [k,v] of Object.entries(choice.Stats as Record<string,any>)) {
-        if(typeof v !== 'number') continue
+        if(typeof v!== 'number') continue
         const finalKey = toSafeName(k)
         if(this.statsSystem.stats.some(s=>s.name===finalKey)){
           newStats[finalKey] = v as number
         }
       }
-      // cleanup legacy props
       const toDelete = ['Cebula','Wstyd','Portfel','Reputacja','cebula','wstyd','portfel','reputacja','a','b','c','d','A','B','C','D']
       toDelete.forEach(k => delete choice[k])
       choice.Stats = newStats
       this.statsSystem.stats.forEach(s=>{ if(choice.Stats[s.name]==null) choice.Stats[s.name]=0 })
-      // FIX: fix paths in choice
       if(choice.ReactionImage) choice.ReactionImage = fixRelPath(choice.ReactionImage)
       if(choice.SoundFile) choice.SoundFile = fixRelPath(choice.SoundFile)
     },
+    // FIXED: nie ustawia automatycznie NextDayId na day+1
     normalizeScene(scene: Scene): Scene {
-      // FIX: fix all asset paths in scene
       if(scene.Background) scene.Background = fixRelPath(scene.Background)
-
       const isEnd = scene.Id.startsWith('koniec_dnia_') || scene.Id.startsWith('koniec_dnia') || scene.IsEndDay || scene.Type === 'end_of_day'
       if (isEnd) {
         scene.IsEndDay = true
         scene.Type = 'end_of_day'
-        if (!scene.NextDayId) {
-          const dayNum = scene.Day || parseInt(this.currentDay.replace('day','')) || 1
-          scene.NextDayId = `day${dayNum+1}`
-          scene.NextDay = `day${dayNum+1}`
-        }
         if (!scene.Transfers) {
           scene.Transfers = { keep_flags: [], keep_stats: this.statsSystem.stats.map(s=>s.name), summary_text: '' }
         } else {
           scene.Transfers.keep_stats = this.statsSystem.stats.map(s=>s.name)
           if(!scene.Transfers.keep_flags) scene.Transfers.keep_flags = []
         }
-        if(!scene.Choices?.length){
-          scene.Choices = [{
-            Text: 'Śpij',
-            Next: 'END_DAY',
-            NextDayId: scene.NextDayId,
-            Stats: this.createEmptyStats(),
-            ReactionText: '',
-            ReactionImage: '',
-            SoundFile: ''
-          }]
-        }
+        if(!scene.Choices) scene.Choices = []
       }
-      if (scene.IsEndDay && !scene.Type) scene.Type = 'end_of_day'
+      if (scene.IsEndDay &&!scene.Type) scene.Type = 'end_of_day'
       return scene
     },
     async loadAssets() {
@@ -228,10 +206,9 @@ export const useProjectStore = defineStore('project', {
           ListAssets(this.projectPath).catch(()=>[] as string[]),
           ListAudioAssets(this.projectPath).catch(()=>[] as string[])
         ])
-        // FIX: ListAssets returns images, ListAudioAssets returns sounds - merge correctly
         this.assets.images = (images || []).map(fixRelPath)
         this.assets.sounds = (sounds || []).map(fixRelPath)
-        this.assets.all = [...this.assets.images, ...this.assets.sounds]
+        this.assets.all = [...this.assets.images,...this.assets.sounds]
       } catch {
         this.assets.all=[]; this.assets.images=[]; this.assets.sounds=[]
       }
@@ -268,7 +245,7 @@ export const useProjectStore = defineStore('project', {
           const finalName = toSafeName((s.name||s.id||'').toString())
           return { id: finalName, name: finalName, initial: s.initial??0 }
         }).filter(s=>s.name)
-        this.statsSystem = { stats: migrated.length ? migrated : [...DEFAULT_STATS] }
+        this.statsSystem = { stats: migrated.length? migrated : [...DEFAULT_STATS] }
         this.ensureStatsSystem()
         this.avatarSystem = {
           default: fixRelPath(parsed.avatarSystem?.default||''),
@@ -281,7 +258,7 @@ export const useProjectStore = defineStore('project', {
         })
         let dayFiles: string[] = []
         try { dayFiles = await ListFiles(`${path}/Data`, '.json') || [] } catch { dayFiles = ['day1.json'] }
-        dayFiles = dayFiles.filter(f => !f.startsWith('_') && !f.startsWith('.'))
+        dayFiles = dayFiles.filter(f =>!f.startsWith('_') &&!f.startsWith('.'))
         this.days = {}
         for (const file of dayFiles) {
           const dayName = file.replace('.json','')
@@ -299,11 +276,11 @@ export const useProjectStore = defineStore('project', {
       } catch (e) { console.error(e); this.projectPath = null; throw e }
     },
     async scanAssets() {
-      // DEPRECATED - use loadAssets, kept for compatibility
       await this.loadAssets()
     },
+    // FIXED: auto-tworzy brakujące dni + nie sypie END_DAY->day2 bez pliku
     async saveProject() {
-      if (!this.projectPath || !this.meta) return
+      if (!this.projectPath ||!this.meta) return
       this.saveStatus = 'Zapisywanie...'
       try {
         this.ensureAvatarSystem(); this.ensureStatsSystem()
@@ -313,20 +290,49 @@ export const useProjectStore = defineStore('project', {
             scene.Choices?.forEach((c:any) => this.migrateChoiceStats(c))
           })
         })
+
+        // FIX: auto-twórz dni na które są linki
+        const referencedDays = new Set<string>()
+        Object.values(this.days).forEach(scenes => {
+          scenes.forEach(s => {
+            if (s.NextDayId) referencedDays.add(s.NextDayId.replace('.json','').trim())
+            if (s.NextDay) referencedDays.add(s.NextDay.replace('.json','').trim())
+            s.Choices?.forEach(c => {
+              if (c.NextDayId) referencedDays.add(c.NextDayId.replace('.json','').trim())
+              if ((c as any).NextDay) referencedDays.add((c as any).NextDay.replace('.json','').trim())
+            })
+          })
+        })
+        for (const ref of referencedDays) {
+          if (!ref) continue
+          if (!this.days[ref]) {
+            const num = parseInt(ref.replace('day','')) || Object.keys(this.days).length+1
+            this.days[ref] = [{
+              Id: `start`,
+              SceneTitle: `Dzień ${num} - Auto`,
+              Background: 'images/bg_front.jpg',
+              Text: `Dzień ${num} - auto-utworzony bo był na niego link w poprzednim dniu. Podmień treść.`,
+              Choices: [],
+              Type: 'normal' as const,
+              Day: num
+            }]
+          }
+        }
+
         const toSave = {
-          ...this.meta,
+         ...this.meta,
           avatarSystem: { default: fixRelPath(this.avatarSystem.default), rules: this.avatarSystem.rules.map(r=>({...r, use: fixRelPath(r.use)})) },
           statsSystem: { stats: this.statsSystem.stats }
         }
         await WriteJSON(`${this.projectPath}/project.janproj`, JSON.stringify(toSave, null, 2))
         for (const dayFile of Object.keys(this.days)) {
           const cleaned = this.days[dayFile].map(scene => ({
-            ...scene,
+           ...scene,
             Background: fixRelPath(scene.Background || ''),
             Choices: scene.Choices?.map((c:any) => {
               const {id,...cleanChoice}=c
               return {
-                ...cleanChoice,
+               ...cleanChoice,
                 ReactionImage: fixRelPath(cleanChoice.ReactionImage||''),
                 SoundFile: fixRelPath(cleanChoice.SoundFile||'')
               }
@@ -335,13 +341,13 @@ export const useProjectStore = defineStore('project', {
           await WriteJSON(`${this.projectPath}/Data/${dayFile}.json`, JSON.stringify(cleaned, null, 2))
         }
         const manifest = {
-          days: Object.keys(this.days),
+          days: Object.keys(this.days).sort(),
           startDay: this.meta.startDay || Object.keys(this.days)[0] || 'day1',
           startScene: this.meta.startScene || 'start',
           version: new Date().toISOString()
         }
         await WriteJSON(`${this.projectPath}/Data/_manifest.json`, JSON.stringify(manifest, null, 2))
-        this.saveStatus='Zapisano + manifest'; setTimeout(()=>{this.saveStatus=''},2500)
+        this.saveStatus='Zapisano + auto-dni'; setTimeout(()=>{this.saveStatus=''},2500)
       } catch (e) { console.error(e); this.saveStatus='Błąd zapisu: '+e }
     },
     addStat() {
@@ -389,29 +395,13 @@ export const useProjectStore = defineStore('project', {
         IsEndDay: preset.IsEndDay || false,
         Type: preset.Type || (preset.IsEndDay? 'end_of_day' : 'normal'),
         Day: preset.Day || currentDayNum,
-        NextDayId: preset.NextDayId || `day${currentDayNum+1}`,
-        NextDay: preset.NextDay || `day${currentDayNum+1}`,
         Transfers: preset.Transfers || { keep_flags: [], keep_stats: this.statsSystem.stats.map(s=>s.name), summary_text: '' }
       }
       const newScene: Scene = {...base,...preset, Id: newId }
       if (newScene.IsEndDay) {
         newScene.Type = 'end_of_day'
-        if (!preset.NextDayId) {
-          newScene.NextDay = `day${currentDayNum+1}`
-          newScene.NextDayId = `day${currentDayNum+1}`
-        }
         newScene.Transfers = { keep_flags: [], keep_stats: this.statsSystem.stats.map(s=>s.name), summary_text: '' }
-        if (!preset.Choices?.length) {
-          newScene.Choices = [{
-            Text: 'Śpij',
-            Next: 'END_DAY',
-            NextDayId: newScene.NextDayId,
-            Stats: this.createEmptyStats(),
-            ReactionText: '',
-            ReactionImage: '',
-            SoundFile: ''
-          }]
-        }
+        if (!preset.Choices) newScene.Choices = []
       } else {
         if (!newScene.Choices?.length) newScene.Choices = []
       }
@@ -450,9 +440,6 @@ export const useProjectStore = defineStore('project', {
         const clean = (value as string).replace('.json','').trim()
         this.currentScene.NextDayId = clean
         this.currentScene.NextDay = clean
-        if (this.currentScene.Choices?.[0]?.Next === 'END_DAY' && !this.currentScene.Choices[0].NextDayId) {
-          this.currentScene.Choices[0].NextDayId = clean
-        }
       }
     },
     addDay(dayId: string) {
@@ -463,7 +450,7 @@ export const useProjectStore = defineStore('project', {
         {
           Id:`start_d${dayNum}`,
           SceneTitle:`Dzień ${dayNum} Start`,
-          Background:'images/bg_tutorial.webp',
+          Background:'images/bg_tutorial.jpg',
           Text:`Początek dnia ${dayNum}`,
           Choices:[{ id: (crypto as any).randomUUID?.() || Math.random().toString(36).slice(2), Text:'Dalej', Next:endId, Stats: this.createEmptyStats() }],
           Type:'normal' as const,
@@ -472,15 +459,13 @@ export const useProjectStore = defineStore('project', {
         {
           Id:endId,
           SceneTitle:`KONIEC DNIA ${dayNum}`,
-          Background:'images/bg_tutorial.webp',
+          Background:'images/bg_tutorial.jpg',
           Text:`Koniec dnia ${dayNum}. Idziesz spać.`,
           IsEndDay: true,
           Type:'end_of_day' as const,
           Day: dayNum,
-          NextDayId: `day${dayNum+1}`,
-          NextDay: `day${dayNum+1}`,
           Transfers: { keep_flags: [], keep_stats: this.statsSystem.stats.map(s=>s.name), summary_text: '' },
-          Choices:[{ id: (crypto as any).randomUUID?.() || Math.random().toString(36).slice(2), Text:'Śpij', Next:'END_DAY', NextDayId: `day${dayNum+1}`, Stats: this.createEmptyStats(), ReactionText:'', ReactionImage:'', SoundFile:'' }]
+          Choices:[]
         }
       ];
       this.currentDay=dayId; this.currentSceneId=`start_d${dayNum}`
@@ -491,9 +476,8 @@ export const useProjectStore = defineStore('project', {
       const isEnd = this.currentScene.IsEndDay
       this.currentScene.Choices.push({
         id: (crypto as any).randomUUID?.() || Math.random().toString(36).slice(2),
-        Text: isEnd? 'Idź do...' : 'Nowy wybór',
-        Next: isEnd? 'END_DAY' : this.currentScene.Id,
-        NextDayId: isEnd? this.currentScene.NextDayId : undefined,
+        Text: isEnd? 'Przejdź dalej' : 'Nowy wybór',
+        Next: isEnd? '' : this.currentScene.Id,
         Stats: this.createEmptyStats(),
         ReactionText:'',
         ReactionImage:'',
