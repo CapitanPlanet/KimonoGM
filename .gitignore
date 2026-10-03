@@ -9,6 +9,15 @@ wwwroot/lib/
 *.zip
 .vs/
 .idea/
-# dziwne pliki co masz
 et\ --hard*
 *.lscache
+
+# === JANUSZ MAKER ===
+**/wwwroot/data/
+**/wwwroot/sounds/
+**/wwwroot/images/
+**/wwwroot/Images/
+**/Assets/old/
+**/games/
+Tools/bin/
+Tools/obj/
