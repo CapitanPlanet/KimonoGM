@@ -15,16 +15,16 @@ html,body{height:100%;margin:0;overflow:hidden;background:#000}
   z-index:40!important;
   color:#d4c5a0!important;
   border-radius:12px!important;
-  overflow:hidden!important;
+  overflow:visible!important; /* BYŁO hidden - ucinało suwaki */
 }
 
-/* AVATAR - ZWYKŁE SELFIE, MIEŚCI SIĘ W BOXIE */
+/* AVATAR */
 .janusz-avatar{
   width:100%!important;
   aspect-ratio: 1 / 1!important;
-  height:250px!important; /* kwadrat */
+  height:250px!important;
   object-fit:cover!important;
-  object-position: 50% 20%!important; /* twarz na środku, obcina równo boki i dół */
+  object-position: 50% 20%!important;
   border:2px solid #8b6f47!important;
   display:block!important;
   border-radius:8px!important;
@@ -34,18 +34,44 @@ html,body{height:100%;margin:0;overflow:hidden;background:#000}
 .janusz-panel .jp-stats{padding:10px 0 0 0!important;margin-top:8px!important}
 .janusz-panel .jp-row{display:flex!important;justify-content:space-between!important;color:#d4c5a0!important;font-size:13px!important;padding:3px 0!important}
 .janusz-panel .jp-row span{color:#ffd700!important}
-.janusz-panel .jp-row:has(input[type="range"]){gap:8px!important;align-items:center!important;padding:4px 0!important}
-.janusz-panel .jp-row div{display:flex!important;align-items:center!important;gap:8px!important;width:100%!important}
+.janusz-panel .jp-row:has(input[type="range"]){gap:8px!important;align-items:center!important;padding:4px 0!important;min-width:0!important}
+.janusz-panel .jp-row div{display:flex!important;align-items:center!important;gap:8px!important;width:100%!important;min-width:0!important}
 .janusz-panel .jp-row button{min-width:32px!important;width:32px!important;height:32px!important;display:flex!important;align-items:center!important;justify-content:center!important;background:rgba(255,255,255,.08)!important;border:1px solid #555!important;border-radius:6px!important}
-.janusz-panel input[type="range"]{-webkit-appearance:none!important;appearance:none!important;flex:1!important;width:100%!important;height:28px!important;background:transparent!important;padding:0 10px!important;box-sizing:border-box!important;margin:0!important;cursor:pointer!important}
-.janusz-panel input[type="range"]::-webkit-slider-runnable-track{height:6px!important;background:#3a3a3a!important;border-radius:3px!important}
-.janusz-panel input[type="range"]::-moz-range-track{height:6px!important;background:#3a3a3a!important;border-radius:3px!important}
-.janusz-panel input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none!important;width:16px!important;height:16px!important;margin-top:-5px!important;border-radius:50%!important;border:2px solid #000!important}
-.janusz-panel input[type="range"]::-moz-range-thumb{width:16px!important;height:16px!important;border-radius:50%!important;border:2px solid #000!important}
+
+/* === SUWAKI - FIX 0px === */
+.janusz-panel input[type="range"]{
+  -webkit-appearance:none!important;
+  appearance:none!important;
+  flex:0 0 auto!important; /* BYŁO flex:1 = 0px na iOS */
+  width:calc(100% - 48px)!important;
+  min-width:140px!important;
+  height:36px!important;
+  background:transparent!important;
+  padding:0 6px!important;
+  margin:0!important;
+  box-sizing:border-box!important;
+  cursor:pointer!important;
+  touch-action:pan-y!important; /* BYŁO none */
+  pointer-events:auto!important;
+  display:block!important;
+}
+
+.janusz-panel input[type="range"]::-webkit-slider-runnable-track{height:8px!important;background:#3a3a3a!important;border-radius:3px!important}
+.janusz-panel input[type="range"]::-moz-range-track{height:8px!important;background:#3a3a3a!important;border-radius:3px!important}
+.janusz-panel input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none!important;width:28px!important;height:28px!important;margin-top:-10px!important;border-radius:50%!important;border:2px solid #000!important}
+.janusz-panel input[type="range"]::-moz-range-thumb{width:28px!important;height:28px!important;border-radius:50%!important;border:2px solid #000!important}
 .janusz-panel .jp-row:nth-last-child(2) input[type="range"]::-webkit-slider-thumb{background:#ff3b3b!important}
 .janusz-panel .jp-row:nth-last-child(2) input[type="range"]::-moz-range-thumb{background:#ff3b3b!important}
 .janusz-panel .jp-row:last-child input[type="range"]::-webkit-slider-thumb{background:#2ecc71!important}
 .janusz-panel .jp-row:last-child input[type="range"]::-moz-range-thumb{background:#2ecc71!important}
+
+/* wywal stare .volume-slider z innych plików */
+.volume-slider, .sfx-slider {
+  touch-action:pan-y!important;
+  min-width:140px!important;
+  height:36px!important;
+  flex:0 0 auto!important;
+}
 
 .bottom-ui{position:absolute!important;left:50%!important;bottom:70px!important;transform:translateX(-50%)!important;width:85%!important;max-width:900px!important;padding:0!important;z-index:20!important}
 .narration-box{background:rgba(0,0,0,.9);border:3px solid #8b6f47;padding:15px;color:#d4c5a0;margin-bottom:12px}
@@ -64,9 +90,14 @@ html,body{height:100%;margin:0;overflow:hidden;background:#000}
 .game-container:has(.reaction-overlay)::before{content:''!important;position:fixed!important;inset:0!important;background:rgba(0,0,0,.6)!important;backdrop-filter:blur(4px)!important;z-index:99998!important}
 
 @media (max-width:768px){
-  .janusz-panel{left:10px!important;top:52px!important;width:140px!important}
+  .janusz-panel{left:10px!important;top:52px!important;width:160px!important;overflow:visible!important}
   .janusz-avatar{height:140px!important}
-  .janusz-panel input[type="range"]{height:36px!important;padding:0 12px!important}
+  .janusz-panel input[type="range"]{
+    height:44px!important;
+    min-width:90px!important;
+    width:calc(100% - 40px)!important;
+    padding:0 6px!important;
+  }
   .bottom-ui{left:8px!important;right:8px!important;bottom:85px!important;width:auto!important;max-width:none!important;transform:none!important;position:fixed!important;z-index:50!important;background:transparent!important}
   .bottom-ui .narration-box{background:rgba(0,0,0,.6)!important;backdrop-filter:blur(4px)!important;border:1px solid rgba(255,255,255,.6)!important;border-left:3px solid #ffd700!important;margin-bottom:0!important}
   .bottom-ui .choices-container,.desktop-only{display:none!important}

@@ -1,0 +1,66 @@
+[
+  {
+    "Id": "start_d2",
+    "SceneTitle": "Dzień 2 Start",
+    "Background": "images/bg_tutorial.webp",
+    "Text": "Początek dnia 2",
+    "Choices": [
+      {
+        "Text": "Dalej",
+        "Next": "koniec_dnia_2",
+        "Stats": {
+          "QQQQ": 2,
+          "WWW": 2,
+          "EEEEE": 2,
+          "RRRRR": -1
+        },
+        "ReactionImage": "",
+        "SoundFile": ""
+      },
+      {
+        "Text": "Nowy wybór",
+        "Next": "koniec_dnia_2",
+        "Stats": {
+          "QQQQ": 0,
+          "WWW": 0,
+          "EEEEE": 0,
+          "RRRRR": 0
+        },
+        "ReactionText": "",
+        "ReactionImage": "",
+        "SoundFile": ""
+      }
+    ],
+    "Type": "normal",
+    "Day": 2
+  },
+  {
+    "Id": "koniec_dnia_2",
+    "SceneTitle": "KONIEC DNIA 2",
+    "Background": "images/bg_tutorial.webp",
+    "Text": "Koniec dnia 2. Idziesz spać.",
+    "IsEndDay": true,
+    "Type": "end_of_day",
+    "Day": 2,
+    "Transfers": {
+      "keep_flags": [],
+      "keep_stats": [
+        "QQQQ",
+        "WWW",
+        "EEEEE",
+        "RRRRR"
+      ],
+      "summary_text": "qqq"
+    },
+    "Choices": [
+      {
+        "Text": "Zakończ",
+        "Next": "END",
+        "Stats": {},
+        "ReactionText": "",
+        "ReactionImage": "",
+        "SoundFile": ""
+      }
+    ]
+  }
+]

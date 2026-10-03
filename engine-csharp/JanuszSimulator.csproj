@@ -1,37 +1,40 @@
 <Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
-  
   <PropertyGroup>
-    <DefaultItemExcludes>$(DefaultItemExcludes);Tools\**</DefaultItemExcludes>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Tools\**;bin\**;obj\**</DefaultItemExcludes>
+    <BaseIntermediateOutputPath>obj\Janusz\</BaseIntermediateOutputPath>
   </PropertyGroup>
-  
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="8.0.0" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
-    <GameImages Include="Assets\GameImages\**\*.*" />
     <GameImages Include="Assets\images\**\*.*" />
-    <GameImages Include="..\games\10003\images\**\*.*" />
-    <SoundFiles Include="Assets\sounds\**\*.*" />
-    <!-- BEZ Exclude na day*.json - chcemy czyste day1, day2 -->
-    <DataFiles Include="Assets\data\**\*.*" Exclude="Assets\data\mielno_ending.json" />
+    <SoundFiles Include="Assets\sounds\**\*.*" Condition="Exists('Assets\sounds')" />
+    <!-- TUTAJ FIX: łapie Data + project.janproj z Assets i z Data -->
+    <DataFiles Include="Assets\Data\**\*.*" />
+    <DataFiles Include="Assets\*.janproj" />
+    <DataFiles Include="Assets\*.json" />
   </ItemGroup>
 
-  <!-- USUNIĘTE CleanGameImagesBeforeBuild - to kasowało Ci bg_front i robiło 404 -->
-
-  <Target Name="CopyGameAssets" BeforeTargets="BeforeBuild">
-    <MakeDir Directories="wwwroot\images;wwwroot\Images;wwwroot\data;wwwroot\sounds" />
-    <Copy SourceFiles="@(GameImages)" DestinationFolder="wwwroot\Images\%(RecursiveDir)" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(GameImages)" DestinationFolder="wwwroot\images\%(RecursiveDir)" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(SoundFiles)" DestinationFolder="wwwroot\sounds\%(RecursiveDir)" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(DataFiles)" DestinationFolder="wwwroot\data\%(RecursiveDir)" SkipUnchangedFiles="true" />
-    <Message Importance="high" Text="Assets -> wwwroot: GameImages, sounds, data SKOPIOWANE (bez bundla)" />
+  <Target Name="JanuszClean" BeforeTargets="PrepareForBuild;ResolveStaticWebAssetsInputs;DefineStaticWebAssets;BeforeBuild">
+    <Delete Files="wwwroot\data\**\*.*;wwwroot\sounds\**\*.*;" />
+    <RemoveDir Directories="wwwroot\sounds\lektor;wwwroot\sounds;wwwroot\data" />
   </Target>
 
-  <!-- USUNIĘTE BundleDaysToScenes - nie lepimy plików -->
-
+  <Target Name="CopyGameAssets" BeforeTargets="PrepareForBuild;BeforeBuild" DependsOnTargets="JanuszClean">
+    <MakeDir Directories="wwwroot\images;wwwroot\Images;wwwroot\data;wwwroot\sounds" />
+    <Copy SourceFiles="@(GameImages)" DestinationFolder="wwwroot\images\%(RecursiveDir)" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="@(GameImages)" DestinationFolder="wwwroot\Images\%(RecursiveDir)" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="@(SoundFiles)" DestinationFolder="wwwroot\sounds\%(RecursiveDir)" SkipUnchangedFiles="false" Condition="Exists('Assets\sounds')" />
+    <Copy SourceFiles="@(DataFiles)" DestinationFolder="wwwroot\data\%(RecursiveDir)" SkipUnchangedFiles="false" />
+    <!-- Dodatkowo kopiuje project.janproj do root wwwroot żeby złapał drugi fallback -->
+    <Copy SourceFiles="Assets\project.janproj" DestinationFolder="wwwroot" SkipUnchangedFiles="false" Condition="Exists('Assets\project.janproj')" />
+    <Copy SourceFiles="Assets\Data\project.janproj" DestinationFolder="wwwroot\data" SkipUnchangedFiles="false" Condition="Exists('Assets\Data\project.janproj')" />
+    <Message Text="COPIED DATA: @(DataFiles)" Importance="high" />
+  </Target>
 </Project>

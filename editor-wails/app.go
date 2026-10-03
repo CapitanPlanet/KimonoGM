@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -28,29 +29,25 @@ type App struct {
 func NewApp() *App { return &App{} }
 func (a *App) startup(ctx context.Context) { a.ctx = ctx }
 
-// --- Helpers - SECURITY ---
-
+// --- SECURITY HELPERS ---
 func (a *App) cleanProjectPath() string {
 	if a.projectPath == "" {
 		return ""
 	}
 	return filepath.Clean(a.projectPath)
 }
-
 func (a *App) isInsideProject(targetPath string) bool {
 	if a.projectPath == "" {
 		return false
 	}
 	proj := a.cleanProjectPath()
 	target := filepath.Clean(targetPath)
-	// must be inside proj or equal
 	rel, err := filepath.Rel(proj, target)
 	if err != nil {
 		return false
 	}
 	return !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) && rel != ".."
 }
-
 func (a *App) safeJoin(elem ...string) (string, error) {
 	if a.projectPath == "" {
 		return "", fmt.Errorf("brak projektu")
@@ -62,7 +59,6 @@ func (a *App) safeJoin(elem ...string) (string, error) {
 	}
 	return clean, nil
 }
-
 func (a *App) cleanAssetPath(input string) string {
 	p := strings.TrimSpace(input)
 	if p == "" {
@@ -70,7 +66,6 @@ func (a *App) cleanAssetPath(input string) string {
 	}
 	p = strings.ReplaceAll(p, "\\", "/")
 	p = filepath.ToSlash(p)
-	// If absolute or contains project path, strip to filename
 	if filepath.IsAbs(p) || strings.Contains(p, ":") {
 		cleanProject := filepath.ToSlash(filepath.Clean(a.projectPath))
 		if cleanProject != "" && strings.Contains(p, cleanProject) {
@@ -84,19 +79,70 @@ func (a *App) cleanAssetPath(input string) string {
 	return filepath.FromSlash(p)
 }
 
-// --- Project ---
+// --- RECENT PROJECTS ---
+func (a *App) recentFilePath() string {
+	home, _ := os.UserHomeDir()
+	dir := filepath.Join(home, ".janusz-maker")
+	_ = os.MkdirAll(dir, 0755)
+	return filepath.Join(dir, "recent.json")
+}
+func (a *App) GetRecentProjects() ([]string, error) {
+	path := a.recentFilePath()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return []string{}, nil
+	}
+	var list []string
+	if err := json.Unmarshal(b, &list); err != nil {
+		return []string{}, nil
+	}
+	var out []string
+	for _, p := range list {
+		if _, err := os.Stat(p); err == nil {
+			out = append(out, p)
+		}
+		if len(out) >= 10 {
+			break
+		}
+	}
+	return out, nil
+}
+func (a *App) AddRecentProject(p string) error {
+	p = filepath.Clean(p)
+	if p == "" {
+		return nil
+	}
+	existing, _ := a.GetRecentProjects()
+	var filtered []string
+	for _, e := range existing {
+		if e != p {
+			filtered = append(filtered, e)
+		}
+	}
+	filtered = append([]string{p}, filtered...)
+	if len(filtered) > 10 {
+		filtered = filtered[:10]
+	}
+	b, _ := json.Marshal(filtered)
+	return os.WriteFile(a.recentFilePath(), b, 0644)
+}
 
+// --- PROJECT PATH ---
 func (a *App) SetProjectPath(path string) { a.projectPath = filepath.Clean(path) }
-func (a *App) GetProjectPath() string { return a.projectPath }
+func (a *App) GetProjectPath() string     { return a.projectPath }
 func (a *App) GetDefaultProjectPath() string {
+	exe, _ := os.Executable()
+	root := filepath.Join(filepath.Dir(exe), "..", "..", "..")
+	games := filepath.Join(root, "games")
+	if _, err := os.Stat(games); err == nil {
+		return games
+	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, "Documents", "JanuszProjects")
 }
-
 func (a *App) SelectFolder() (string, error) {
 	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{Title: "Wybierz folder projektu"})
 }
-
 func (a *App) OpenProjectFolder(path string) error {
 	if path == "" {
 		path = a.projectPath
@@ -116,22 +162,13 @@ func (a *App) OpenProjectFolder(path string) error {
 	}
 	return cmd.Start()
 }
-
 func (a *App) CreateProject(basePath string, name string) error {
 	basePath = filepath.Clean(basePath)
-	// Structure for janusz-maker
-	for _, d := range []string{
-		"Data",
-		"images",
-		filepath.Join("sounds", "sfx"),
-		filepath.Join("sounds", "voice"),
-		filepath.Join("sounds", "music"),
-	} {
+	for _, d := range []string{"Data", "images", filepath.Join("sounds", "sfx"), filepath.Join("sounds", "voice"), filepath.Join("sounds", "music")} {
 		if err := os.MkdirAll(filepath.Join(basePath, d), 0755); err != nil {
 			return err
 		}
 	}
-
 	janprojPath := filepath.Join(basePath, "project.janproj")
 	janprojContent := fmt.Sprintf(`{
   "gameName": "%s",
@@ -153,15 +190,14 @@ func (a *App) CreateProject(basePath string, name string) error {
 	if err := os.WriteFile(janprojPath, []byte(janprojContent), 0644); err != nil {
 		return err
 	}
-
-	// Minimal day1
+	// FIX: Poprawny day1 bez wskazywania na nieistniejacy day2
 	day1Path := filepath.Join(basePath, "Data", "day1.json")
 	day1Content := `[
   {
     "Id": "start",
     "SceneTitle": "Dzień 1 - Start",
-    "Background": "images/bg_tutorial.webp",
-    "Text": "Janusz budzi się.",
+    "Background": "images/bg_tutorial.jpg",
+    "Text": "Janusz budzi się. To początek dnia 1.",
     "Choices": [{"Text": "Dalej", "Next": "koniec_dnia_1"}],
     "Type": "normal",
     "Day": 1
@@ -169,22 +205,27 @@ func (a *App) CreateProject(basePath string, name string) error {
   {
     "Id": "koniec_dnia_1",
     "SceneTitle": "KONIEC DNIA 1",
-    "Background": "images/bg_tutorial.webp",
+    "Background": "images/bg_tutorial.jpg",
     "Text": "Koniec dnia 1.",
     "IsEndDay": true,
     "Type": "end_of_day",
     "Day": 1,
-    "NextDayId": "day2",
-    "NextDay": "day2",
-    "Choices": [{"Text": "Śpij", "Next": "END_DAY", "NextDayId": "day2"}]
+    "Choices": []
   }
 ]`
 	if err := os.WriteFile(day1Path, []byte(day1Content), 0644); err != nil {
 		return err
 	}
+	// FIX: Tworzymy od razu poprawny _manifest.json
+	manifestPath := filepath.Join(basePath, "Data", "_manifest.json")
+	manifestContent := `{
+  "days": ["day1"],
+  "startDay": "day1",
+  "startScene": "start",
+  "version": "2026-10-01T00:00:00.000Z"
+}`
+	_ = os.WriteFile(manifestPath, []byte(manifestContent), 0644)
 
-	// Copy template assets if exist - from embed first, then fallback to disk
-	// We try to copy bg_tutorial.webp from frontend/src/assets if available
 	srcAssets := "frontend/src/assets"
 	if _, err := os.Stat(srcAssets); err == nil {
 		_ = filepath.Walk(srcAssets, func(p string, info fs.FileInfo, err error) error {
@@ -204,18 +245,16 @@ func (a *App) CreateProject(basePath string, name string) error {
 			return nil
 		})
 	}
-
 	a.projectPath = basePath
+	_ = a.AddRecentProject(basePath)
 	return nil
 }
 
-// --- Generic IO ---
-
+// --- GENERIC IO ---
 func (a *App) ReadJSON(fullPath string) (string, error) {
 	b, err := os.ReadFile(filepath.Clean(fullPath))
 	return string(b), err
 }
-
 func (a *App) WriteJSON(fullPath string, content string) error {
 	clean := filepath.Clean(fullPath)
 	if err := os.MkdirAll(filepath.Dir(clean), 0755); err != nil {
@@ -223,7 +262,6 @@ func (a *App) WriteJSON(fullPath string, content string) error {
 	}
 	return os.WriteFile(clean, []byte(content), 0644)
 }
-
 func (a *App) SaveJsonFile(filename string, content string) error {
 	if a.projectPath == "" {
 		return fmt.Errorf("brak projectPath")
@@ -239,7 +277,6 @@ func (a *App) SaveJsonFile(filename string, content string) error {
 	}
 	return os.WriteFile(safe, []byte(content), 0644)
 }
-
 func (a *App) ListFiles(dirPath string, ext string) ([]string, error) {
 	clean := filepath.Clean(dirPath)
 	entries, err := os.ReadDir(clean)
@@ -254,7 +291,6 @@ func (a *App) ListFiles(dirPath string, ext string) ([]string, error) {
 	}
 	return out, nil
 }
-
 func (a *App) DeleteFile(projectPath string, relativePath string) error {
 	if projectPath == "" {
 		projectPath = a.projectPath
@@ -269,15 +305,11 @@ func (a *App) DeleteFile(projectPath string, relativePath string) error {
 	return os.Remove(target)
 }
 
-// --- Images ---
-
+// --- IMAGES ---
 func (a *App) SelectImageFile() (string, error) {
 	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Wybierz obraz",
-		Filters: []runtime.FileFilter{{DisplayName: "Images", Pattern: "*.png;*.jpg;*.jpeg;*.webp"}},
-	})
+		Title: "Wybierz obraz", Filters: []runtime.FileFilter{{DisplayName: "Images", Pattern: "*.png;*.jpg;*.jpeg;*.webp"}}})
 }
-
 func (a *App) ImportAsset(srcPath string, assetType string) (string, error) {
 	if a.projectPath == "" {
 		return "", fmt.Errorf("brak projektu")
@@ -286,16 +318,13 @@ func (a *App) ImportAsset(srcPath string, assetType string) (string, error) {
 		assetType = "bg"
 	}
 	assetType = strings.ToLower(strings.TrimSpace(assetType))
-
 	dstDir := filepath.Join(a.projectPath, "images")
 	if err := os.MkdirAll(dstDir, 0755); err != nil {
 		return "", err
 	}
-
 	origBase := filepath.Base(srcPath)
 	base := origBase
 	lowBase := strings.ToLower(base)
-
 	hasPrefix := strings.HasPrefix(lowBase, "bg_") || strings.HasPrefix(lowBase, "re_") || strings.HasPrefix(lowBase, "av_")
 	if !hasPrefix {
 		switch assetType {
@@ -307,9 +336,7 @@ func (a *App) ImportAsset(srcPath string, assetType string) (string, error) {
 			base = "bg_" + origBase
 		}
 	}
-
 	dst := filepath.Join(dstDir, base)
-	// avoid overwrite - add suffix
 	if _, err := os.Stat(dst); err == nil {
 		ext := filepath.Ext(base)
 		name := strings.TrimSuffix(base, ext)
@@ -322,7 +349,6 @@ func (a *App) ImportAsset(srcPath string, assetType string) (string, error) {
 			}
 		}
 	}
-
 	in, err := os.Open(srcPath)
 	if err != nil {
 		return "", err
@@ -338,7 +364,6 @@ func (a *App) ImportAsset(srcPath string, assetType string) (string, error) {
 	}
 	return "images/" + base, nil
 }
-
 func (a *App) findFileByName(name string) (string, bool) {
 	base := filepath.Base(name)
 	if base == "" || base == "." {
@@ -365,7 +390,6 @@ func (a *App) findFileByName(name string) (string, bool) {
 	}
 	return "", false
 }
-
 func (a *App) GetImageBase64(relPath string) (string, error) {
 	if a.projectPath == "" {
 		return "", fmt.Errorf("brak projektu")
@@ -395,7 +419,6 @@ func (a *App) GetImageBase64(relPath string) (string, error) {
 	}
 	return fmt.Sprintf("data:%s;base64,%s", mime, base64.StdEncoding.EncodeToString(b)), nil
 }
-
 func (a *App) DeleteAsset(relPath string) error {
 	if a.projectPath == "" {
 		return fmt.Errorf("brak projektu")
@@ -408,7 +431,6 @@ func (a *App) DeleteAsset(relPath string) error {
 	}
 	return os.Remove(clean)
 }
-
 func (a *App) ListAssets(projectPath string) ([]string, error) {
 	if projectPath == "" {
 		projectPath = a.projectPath
@@ -432,15 +454,11 @@ func (a *App) ListAssets(projectPath string) ([]string, error) {
 	return out, nil
 }
 
-// --- Audio ---
-
+// --- AUDIO ---
 func (a *App) SelectAudioFile() (string, error) {
 	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Wybierz audio",
-		Filters: []runtime.FileFilter{{DisplayName: "Audio", Pattern: "*.mp3;*.wav;*.ogg"}},
-	})
+		Title: "Wybierz audio", Filters: []runtime.FileFilter{{DisplayName: "Audio", Pattern: "*.mp3;*.wav;*.ogg"}}})
 }
-
 func (a *App) ImportAudioAsset(srcPath string, audioType string) (string, error) {
 	if a.projectPath == "" {
 		return "", fmt.Errorf("brak projektu")
@@ -457,7 +475,6 @@ func (a *App) ImportAudioAsset(srcPath string, audioType string) (string, error)
 		return "", err
 	}
 	dst := filepath.Join(dstDir, filepath.Base(srcPath))
-
 	in, err := os.Open(srcPath)
 	if err != nil {
 		return "", err
@@ -473,7 +490,6 @@ func (a *App) ImportAudioAsset(srcPath string, audioType string) (string, error)
 	}
 	return filepath.ToSlash(filepath.Join("sounds", sub, filepath.Base(srcPath))), nil
 }
-
 func (a *App) ListAudioAssets(projectPath string) ([]string, error) {
 	if projectPath == "" {
 		projectPath = a.projectPath
@@ -496,7 +512,6 @@ func (a *App) ListAudioAssets(projectPath string) ([]string, error) {
 	})
 	return out, nil
 }
-
 func (a *App) DeleteAudioAsset(relPath string) error {
 	if a.projectPath == "" {
 		return fmt.Errorf("brak projektu")
@@ -509,7 +524,6 @@ func (a *App) DeleteAudioAsset(relPath string) error {
 	}
 	return os.Remove(clean)
 }
-
 func (a *App) GetAudioBase64(relPath string) (string, error) {
 	if a.projectPath == "" {
 		return "", fmt.Errorf("brak projektu")

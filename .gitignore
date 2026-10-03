@@ -1,16 +1,23 @@
-**/bin/
-**/obj/
-**/publish/
-**/dist/
-**/node_modules/
+bin/
+obj/
+publish/
+dist/
+node_modules/
 _old_images_backup/
-wwwroot/
-games/*/wwwroot/
+wwwroot/lib/
 *.exe
 *.zip
 .vs/
 .idea/
+et\ --hard*
 *.lscache
 
-# to do wywalenia:
-# et\ --hard*
+# === JANUSZ MAKER ===
+**/wwwroot/data/
+**/wwwroot/sounds/
+**/wwwroot/images/
+**/wwwroot/Images/
+**/Assets/old/
+**/games/
+Tools/bin/
+Tools/obj/

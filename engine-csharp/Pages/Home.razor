@@ -97,51 +97,62 @@
     
     private string GetTickerNews() {
         if (GameEngine.GameState == null) return "TVP1 - WIADOMOSCI";
-        var s = GameEngine.GameState.Stats; var defs = GameEngine.GameState.StatDefs; var scene = GameEngine.GameState.CurrentScene?.Id ?? "";
+        var s = GameEngine.GameState.Stats; 
+        var defs = GameEngine.GameState.StatDefs; 
+        var scene = GameEngine.GameState.CurrentScene?.Id ?? "";
         var news = new List<string> { "PILNE: Janusz wyszedl z domu o 6:47" };
         foreach(var d in defs) news.Add($"{d.name}: {s.Get(d.id)}pkt");
-        if (scene == "tramwaj") news.Add("KOMUNIKACJA: Awantura w tramwaju linii 10");
-        if (scene == "biedronka") news.Add("GOSPODARKA: Parowki w promocji -12zl");
-        if (scene == "praca") news.Add("PRZEMYSL: Tasma stanela, Janusz naprawia");
-        if (scene == "szef") news.Add("BIZNES: Premia czy parowki?");
-        if (scene == "kebab") news.Add("IMIGRACJA: Turek podniosl ceny");
-        if (scene == "urzad") news.Add("PODATKI: Janusz sklada PIT");
-        if (scene == "blok") news.Add("SPOLECZENSTWO: Sasiadka skarży sie na smietnik");
-        if (scene == "wieczor") news.Add("RODZINA: Grażyna żąda wypłaty");
-        if (s.Get("a") > 50) news.Add("SUKCES: Janusz mistrzem cebuli");
-        if (s.Get("d") < 50) news.Add("BIEDA: Portfel swieci pustkami");
+        if (scene.Contains("tramwaj")) news.Add("KOMUNIKACJA: Awantura w tramwaju linii 10");
+        if (scene.Contains("biedronka")) news.Add("GOSPODARKA: Parowki w promocji -12zl");
+        if (scene.Contains("praca")) news.Add("PRZEMYSL: Tasma stanela, Janusz naprawia");
+        if (scene.Contains("szef")) news.Add("BIZNES: Premia czy parowki?");
+        if (scene.Contains("kebab")) news.Add("IMIGRACJA: Turek podniosl ceny");
+        if (scene.Contains("urzad")) news.Add("PODATKI: Janusz sklada PIT");
+        if (scene.Contains("blok")) news.Add("SPOLECZENSTWO: Sasiadka skarży sie na smietnik");
+        if (scene.Contains("wieczor")) news.Add("RODZINA: Grażyna żąda wypłaty");
+        // FIX: używaj normalizowanych ID zamiast "a", "d"
+        if (s.Get("CEBULA") > 50) news.Add("SUKCES: Janusz mistrzem cebuli");
+        if (s.Get("PORTFEL") < 50) news.Add("BIEDA: Portfel swieci pustkami");
+        if (s.Get("WSTYD") > 70) news.Add("WSTYD: Sąsiedzi patrzą krzywo");
         news.Add("POGODA: -5C, otwieraj okna"); news.Add("SPORT: Reprezentacja przegrala"); news.Add("TVP: Za chwile Teleexpress");
         return string.Join(" *** ", news);
     }
 
     private async Task MakeChoice(Choice choice) {
-        if (!gameStarted) { gameStarted = true; _ = JS.InvokeVoidAsync("JanuszAudio.playMusic", "sounds/s1.mp3"); StartNarrator(); }
+        if (!gameStarted) 
+        { 
+            gameStarted = true; 
+        }
         await GameEngine.MakeChoice(choice);
     }
 
     private void SkipReaction() => GameEngine.SkipReaction();
 
-    private async Task RestartGame() { StopNarrator(); _ = JS.InvokeVoidAsync("JanuszAudio.playMusic", ""); _ = JS.InvokeVoidAsync("JanuszAudio.playVoice", ""); gameStarted = false; await GameEngine.LoadGame(); }
+    private async Task RestartGame() { 
+        try { await JS.InvokeVoidAsync("JanuszAudio.stopMusic"); } catch {}
+        try { await JS.InvokeVoidAsync("JanuszAudio.playVoice", ""); } catch {}
+        gameStarted = false; 
+        await GameEngine.LoadGame(); 
+    }
 
-    private void StopNarrator() { narratorTimer?.Dispose(); narratorTimer = null; _ = JS.InvokeVoidAsync("JanuszAudio.playVoice", ""); }
 
     private void ShowStats() {
-        var s = GameEngine.GameState.Stats; var defs = GameEngine.GameState.StatDefs; var sb = new System.Text.StringBuilder();
-        sb.AppendLine("KONIEC DNIA JANUSZA:\n"); foreach(var d in defs) sb.AppendLine($"{d.name}: {s.Get(d.id)}");
-        sb.AppendLine($"\nGrazyna jest {(s.Get("a") > 30 ? "DUMNA" : "WKURWIONA")}.");
-        GameEngine.GameState.NarrationText = sb.ToString(); StateHasChanged();
+        var s = GameEngine.GameState.Stats; 
+        var defs = GameEngine.GameState.StatDefs; 
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("KONIEC DNIA JANUSZA:\n"); 
+        foreach(var d in defs) sb.AppendLine($"{d.name}: {s.Get(d.id)}");
+        // FIX: też normalizowane ID
+        var cebula = s.Get("CEBULA");
+        sb.AppendLine($"\nGrazyna jest {(cebula > 30 ? "DUMNA" : "WKURWIONA")}.");
+        GameEngine.GameState.NarrationText = sb.ToString(); 
+        StateHasChanged();
     }
 
     protected override async Task OnInitializedAsync() { await GameEngine.LoadGame(); GameEngine.StateChanged += OnStateChanged; }
     private void OnStateChanged() => InvokeAsync(StateHasChanged);
 
-    private void StartNarrator() {
-        var firstDelay = rnd.Next(5000, 10000);
-        narratorTimer = new System.Threading.Timer(async _ => {
-            await InvokeAsync(async () => { var num = rnd.Next(1, 11); await JS.InvokeVoidAsync("JanuszAudio.playVoice", $"sounds/lektor/{num}.mp3"); });
-            var nextDelay = rnd.Next(45000, 90000); narratorTimer?.Change(nextDelay, Timeout.Infinite);
-        }, null, firstDelay, Timeout.Infinite);
-    }
 
-    public void Dispose() { StopNarrator(); GameEngine.StateChanged -= OnStateChanged; }
+
+    public void Dispose() { GameEngine.StateChanged -= OnStateChanged; }
 }
