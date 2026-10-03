@@ -1,8 +1,8 @@
 using Microsoft.JSInterop;
-using JanuszSimulator.Models;
+using MakerEngine.Models;
 using System.Net.Http.Json;
 
-namespace JanuszSimulator.Services;
+namespace MakerEngine.Services;
 
 public class GameEngine
 {

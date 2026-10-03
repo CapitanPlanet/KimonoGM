@@ -1,4 +1,4 @@
-namespace JanuszSimulator.Services;
+namespace MakerEngine.Services;
 
 public class AssetWhitelistService
 {

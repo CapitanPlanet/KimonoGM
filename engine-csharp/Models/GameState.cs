@@ -1,4 +1,4 @@
-namespace JanuszSimulator.Models;
+namespace MakerEngine.Models;
 
 public class StatDef
 {
