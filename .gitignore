@@ -36,3 +36,10 @@ engine-csharp/wwwroot/sounds/
 engine/wwwroot/project.janproj
 engine/wwwroot/data/
 
+
+# generated - never commit
+engine/wwwroot/project.janproj
+engine/wwwroot/data/
+engine/wwwroot/Images/
+engine/wwwroot/sounds/
+
