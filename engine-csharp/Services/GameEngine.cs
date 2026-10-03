@@ -29,6 +29,14 @@ public class GameEngine
 
     public class GameDataWrapper { public List<Scene> scenes { get; set; } = new(); }
 
+    // FIX: brakująca klasa - to powoduje CS0246
+    public class ManifestFile 
+    { 
+        public List<string> days { get; set; } = new(); 
+        public string? startDay { get; set; } 
+        public string? startScene { get; set; } 
+    }
+
     public class AvatarSystem
     {
         public string Default { get; set; } = "";
@@ -92,7 +100,6 @@ public class GameEngine
         _currentDayId = "day1";
         ProjectManifest? project = null;
 
-        // 1. LOAD project.janproj
         try
         {
             var respProj = await _http.GetAsync("data/project.janproj");
@@ -109,7 +116,6 @@ public class GameEngine
         }
         catch (Exception ex) { Console.WriteLine($"[Game] brak project.janproj: {ex.Message}"); }
 
-        // manifest z edytora
         try
         {
             var man = await _http.GetFromJsonAsync<ManifestFile>("data/_manifest.json");
@@ -128,7 +134,6 @@ public class GameEngine
         _projectManifest = project;
         if (project?.days != null && project.days.Any()) _allDayIds = project.days;
 
-        // 2. STATY
         if (project?.statsSystem?.stats != null && project.statsSystem.stats.Any())
         {
             GameState.StatDefs = project.statsSystem.stats.Select(s => new StatDef
@@ -137,16 +142,13 @@ public class GameEngine
                 name = string.IsNullOrWhiteSpace(s.name) ? s.id : s.name,
                 initial = s.initial
             }).ToList();
-            Console.WriteLine($"[Game] Staty z projektu: {string.Join(",", GameState.StatDefs.Select(s => s.name))}");
         }
 
-        // 3. AVATAR
         if (project?.avatarSystem != null)
         {
             var def = project.avatarSystem.Default;
             var filteredRules = project.avatarSystem.Rules.Where(r => IsAllowedAsset(r.Use)).ToList();
             _avatarSystem = new AvatarSystem { Default = IsAllowedAsset(def) ? def : def ?? "", Rules = filteredRules };
-            Console.WriteLine($"[Avatar] z project.janproj: default={_avatarSystem.Default} regul={filteredRules.Count}");
         }
         else
         {
@@ -158,24 +160,21 @@ public class GameEngine
 
         try
         {
-            Console.WriteLine($"[Game] Probuje ladowac data/{_currentDayId}.json");
             var day1 = await _http.GetFromJsonAsync<List<Scene>>($"data/{_currentDayId}.json");
             if (day1 != null && day1.Any())
             {
                 GameState.AllScenes.AddRange(day1);
                 _loadedDays.Add(_currentDayId);
-                Console.WriteLine($"[Game] Zaladowano {day1.Count} scen z {_currentDayId}.json");
             }
         }
-        catch (Exception ex)
+        catch
         {
-            Console.WriteLine($"[Game] Nie udalo sie zaladowac {_currentDayId}.json: {ex.Message}");
             try
             {
                 var data = await _http.GetFromJsonAsync<GameDataWrapper>("data/scenes.json") ?? new();
                 GameState.AllScenes = data.scenes;
             }
-            catch { }
+            catch {}
         }
 
         GameState.Stats = new DynamicStats();
@@ -196,47 +195,41 @@ public class GameEngine
         if (GameState.AllScenes.Any())
         {
             var start = GameState.AllScenes.FirstOrDefault(s => s.Id == startSceneId) ?? GameState.AllScenes.First();
-            Console.WriteLine($"[Game] Start sceny: {start.Id} z {GameState.AllScenes.Count} scen");
             LoadScene(start.Id);
         }
     }
 
-    public class ManifestFile
+    private async Task<bool> EnsureSceneLoaded(string sceneId)
     {
-        public List<string> days { get; set; } = new();
-        public string startDay { get; set; } = "day1";
-        public string startScene { get; set; } = "start";
-        public string version { get; set; } = "";
+        if (GameState.AllScenes.Any(s => s.Id == sceneId)) return true;
+        foreach (var dayId in _allDayIds.Where(d => !_loadedDays.Contains(d)))
+        {
+            try
+            {
+                var scenes = await _http.GetFromJsonAsync<List<Scene>>($"data/{dayId}.json");
+                if (scenes != null && scenes.Any())
+                {
+                    GameState.AllScenes.AddRange(scenes.Where(s => !GameState.AllScenes.Any(existing => existing.Id == s.Id)));
+                    _loadedDays.Add(dayId);
+                    if (scenes.Any(s => s.Id == sceneId)) return true;
+                }
+            }
+            catch {}
+        }
+        return GameState.AllScenes.Any(s => s.Id == sceneId);
     }
 
     public async Task LoadDay(string dayId)
     {
-        if (string.IsNullOrWhiteSpace(dayId) || dayId == "END") return;
-        if (_loadedDays.Contains(dayId))
-        {
-            _currentDayId = dayId;
-            Console.WriteLine($"[Game] Dzień {dayId} już załadowany, przełączam");
-            return;
-        }
+        if (string.IsNullOrWhiteSpace(dayId)) return;
         try
         {
-            Console.WriteLine($"[Game] Ładuję dzień {dayId}.json");
             var scenes = await _http.GetFromJsonAsync<List<Scene>>($"data/{dayId}.json");
             if (scenes != null && scenes.Any())
             {
                 _currentDayId = dayId;
-                // DODAJEMY a nie nadpisujemy - żeby wsteczne skoki działały
-                foreach (var s in scenes)
-                {
-                    if (!GameState.AllScenes.Any(x => x.Id == s.Id)) GameState.AllScenes.Add(s);
-                    else
-                    {
-                        var idx = GameState.AllScenes.FindIndex(x => x.Id == s.Id);
-                        GameState.AllScenes[idx] = s;
-                    }
-                }
-                _loadedDays.Add(dayId);
-                Console.WriteLine($"[Game] Załadowano {scenes.Count} scen z {dayId}. Razem {GameState.AllScenes.Count}");
+                GameState.AllScenes = scenes;
+                _loadedDays.Clear(); _loadedDays.Add(dayId);
                 var start = scenes.FirstOrDefault(s => s.Id.StartsWith("start"))?.Id ?? scenes.First().Id;
                 LoadScene(start);
             }
@@ -244,54 +237,11 @@ public class GameEngine
         catch (Exception ex) { Console.WriteLine($"[Game] Nie udało się załadować {dayId}: {ex.Message}"); }
     }
 
-    // NOWE: znajdź dzień który zawiera scenę
-    private string? FindDayForScene(string sceneId)
-    {
-        // jeśli już załadowana - zwróć null (nie trzeba ładować)
-        if (GameState.AllScenes.Any(s => s.Id == sceneId)) return null;
-        // przeszukaj manifest - wszystkie dni jeszcze niezaładowane
-        // ale nie wiemy który dzień ma tę scenę bez ładowania, więc próbujemy wszystkie
-        return null;
-    }
-
-    private async Task<bool> EnsureSceneLoaded(string sceneId)
-    {
-        if (GameState.AllScenes.Any(s => s.Id == sceneId)) return true;
-        Console.WriteLine($"[Game] Scena {sceneId} nie w pamięci, próbuję załadować pozostałe dni: {string.Join(",", _allDayIds.Where(d => !_loadedDays.Contains(d)))}");
-        foreach (var dayId in _allDayIds.Where(d => !_loadedDays.Contains(d)))
-        {
-            try
-            {
-                var scenes = await _http.GetFromJsonAsync<List<Scene>>($"data/{dayId}.json");
-                if (scenes == null) continue;
-                foreach (var s in scenes)
-                {
-                    if (!GameState.AllScenes.Any(x => x.Id == s.Id)) GameState.AllScenes.Add(s);
-                }
-                _loadedDays.Add(dayId);
-                Console.WriteLine($"[Game] Doładowałem {dayId}: {scenes.Count} scen, razem {GameState.AllScenes.Count}");
-                if (GameState.AllScenes.Any(s => s.Id == sceneId)) return true;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Game] Nie udało się doładować {dayId}: {ex.Message}");
-            }
-        }
-        return GameState.AllScenes.Any(s => s.Id == sceneId);
-    }
-
     public void LoadScene(string sceneId)
     {
         if (sceneId == "END_DAY") return;
-        if (sceneId == "END")
-        {
-            GameState.IsFinished = true;
-            Console.WriteLine("[Game] END - koniec gry");
-            NotifyStateChanged();
-            return;
-        }
         GameState.CurrentScene = GameState.AllScenes.FirstOrDefault(s => s.Id == sceneId);
-        if (GameState.CurrentScene == null) { Console.WriteLine($"[Game] Nie znaleziono sceny {sceneId} w {GameState.AllScenes.Count} załadowanych. Dni załadowane: {string.Join(",", _loadedDays)}"); return; }
+        if (GameState.CurrentScene == null) return;
         GameState.BackgroundImage = NormalizeBg(GameState.CurrentScene.Background);
         GameState.SceneTitle = GameState.CurrentScene.SceneTitle ?? "";
         GameState.NarrationText = GameState.CurrentScene.Text ?? "";
@@ -321,14 +271,32 @@ public class GameEngine
             GameState.ReactionImage = ""; NotifyStateChanged();
             await Task.Delay(5000); GameState.ReactionText = ""; GameState.ReactionImage = ""; NotifyStateChanged(); return;
         }
-        if (!_musicStarted) { _musicStarted = true; try { await _js.InvokeVoidAsync("JanuszAudio.startMusic", "sounds/s1.mp3"); } catch { } }
-        _reactionCts?.Cancel(); ApplyChoiceEffects(choice);
+
+        // FIX: usunięty hardcoded s1.mp3
+        if (!_musicStarted) 
+        { 
+            _musicStarted = true; 
+        }
+
+        _reactionCts?.Cancel(); 
+        ApplyChoiceEffects(choice);
         GameState.ReactionText = string.IsNullOrWhiteSpace(choice.ReactionText) ? "" : choice.ReactionText;
         var reactionImgRaw = choice.ReactionImage;
         if (string.IsNullOrWhiteSpace(reactionImgRaw)) reactionImgRaw = "";
         else if (!IsAllowedAsset(reactionImgRaw)) reactionImgRaw = "";
-        GameState.ReactionImage = reactionImgRaw; NotifyStateChanged();
-        if (!string.IsNullOrWhiteSpace(choice.SoundFile)) _ = _js.InvokeVoidAsync("JanuszAudio.playVoice", $"sounds/{choice.SoundFile}");
+        GameState.ReactionImage = reactionImgRaw; 
+        NotifyStateChanged();
+
+        if (!string.IsNullOrWhiteSpace(choice.SoundFile))
+        {
+            var lower = choice.SoundFile.ToLowerInvariant();
+            var blacklisted = new[] { "s1.mp3", "s2.mp3", "s3.mp3", "old_music.mp3", "muzyka.mp3" };
+            if (!blacklisted.Contains(lower))
+            {
+                _ = _js.InvokeVoidAsync("JanuszAudio.playVoice", $"sounds/{choice.SoundFile}");
+            }
+        }
+
         if (!string.IsNullOrWhiteSpace(GameState.ReactionText) || !string.IsNullOrWhiteSpace(GameState.ReactionImage))
         {
             _reactionCts = new CancellationTokenSource();
@@ -336,44 +304,30 @@ public class GameEngine
         }
         if (!string.IsNullOrWhiteSpace(choice.Next))
         {
-            // FIX 1: END_DAY stary system
             if (choice.Next == "END_DAY")
             {
                 var endScene = GameState.CurrentScene;
                 var nextDay = endScene?.NextDayId ?? endScene?.NextDay ?? "";
-                if (string.IsNullOrWhiteSpace(nextDay) || nextDay == "END") { Console.WriteLine("[Game] END_DAY bez NextDay - koniec gry"); GameState.IsFinished = true; NotifyStateChanged(); return; }
-                Console.WriteLine($"[Game] END_DAY -> ładuję {nextDay}"); await LoadDay(nextDay); return;
+                if (string.IsNullOrWhiteSpace(nextDay) || nextDay == "END") { GameState.IsFinished = true; NotifyStateChanged(); return; }
+                await LoadDay(nextDay); return;
             }
-
-            // FIX 2: END - koniec gry
             if (choice.Next == "END")
             {
-                Console.WriteLine("[Game] END - koniec gry"); GameState.IsFinished = true; NotifyStateChanged(); return;
+                GameState.IsFinished = true; NotifyStateChanged(); return;
             }
-
-            // FIX 3: jeśli to koniec dnia (IsEndDay) i ma NextDayId, załaduj dzień przed przejściem
             if (GameState.CurrentScene?.IsEndDay == true || GameState.CurrentScene?.Type == "end_of_day")
             {
                 var nextDay = GameState.CurrentScene?.NextDayId ?? GameState.CurrentScene?.NextDay;
                 if (!string.IsNullOrWhiteSpace(nextDay) && nextDay != "END" && !_loadedDays.Contains(nextDay))
                 {
-                    Console.WriteLine($"[Game] Koniec dnia {_currentDayId} -> ładuję {nextDay} przed {choice.Next}");
                     await LoadDay(nextDay);
-                    // LoadDay już zrobi LoadScene(start), ale jeśli choice.Next jest inny niż start, nadpiszemy niżej
                 }
             }
-
-            // FIX 4: jeśli scena docelowa nie jest załadowana, spróbuj załadować wszystkie pozostałe dni
             if (!GameState.AllScenes.Any(s => s.Id == choice.Next))
             {
                 var loaded = await EnsureSceneLoaded(choice.Next);
-                if (!loaded)
-                {
-                    Console.WriteLine($"[Game] Nadal nie znaleziono sceny {choice.Next} po doładowaniu wszystkich dni");
-                    return;
-                }
+                if (!loaded) return;
             }
-
             LoadScene(choice.Next);
         }
     }
