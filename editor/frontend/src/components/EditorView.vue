@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import SidePanel from './SidePanel.vue'
-import ScenesPanel from './ScenesPanel.vue'
-import ScenePreview from './ScenePreview.vue'
-import ChoicesPanel from './ChoicesPanel.vue'
-import AvatarEditor from './AvatarEditor.vue'
+import DaysPanel from './DaysPanel.vue'
+import SceneList from './SceneList.vue'
+import SceneCanvas from './SceneCanvas.vue'
+import ChoicesEditor from './ChoicesEditor.vue'
+import JanuszModal from './JanuszModal.vue'
 import { useProjectStore } from '../stores/projectStore'
 import { OpenProjectFolder } from '../../wailsjs/go/main/App'
 import tutorialBg from '../assets/bg_tutorial.webp'
@@ -48,17 +48,17 @@ async function openFolder() {
         </div>
       </div>
       <div class="top-bar-right">
-        <button @click="store.ui.showAvatarEditor = true" class="btn-top-janusz">
+        <button @click="store.ui.showJanuszModal = true" class="btn-top-janusz">
           🧠 JANUSZ [{{ rulesCount }}]
         </button>
       </div>
     </header>
 
     <div v-if="isLoaded" class="main-grid">
-      <SidePanel class="panel" />
-      <ScenesPanel class="panel" />
-      <ScenePreview class="panel panel-preview" />
-      <ChoicesPanel class="panel" />
+      <DaysPanel class="panel" />
+      <SceneList class="panel" />
+      <SceneCanvas class="panel panel-preview" />
+      <ChoicesEditor class="panel" />
     </div>
     <div v-else class="loading">Ładowanie projektu... {{ store.projectPath || '' }}</div>
 
@@ -77,7 +77,7 @@ async function openFolder() {
       </div>
     </div>
 
-    <AvatarEditor />
+    <JanuszModal />
   </div>
 </template>
 
