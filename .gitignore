@@ -21,3 +21,14 @@ et\ --hard*
 **/games/
 Tools/bin/
 Tools/obj/
+# rebrand bins
+**/MakerEngine/bin/
+**/MakerEngine/obj/
+
+
+# generated
+engine-csharp/wwwroot/project.janproj
+engine-csharp/wwwroot/data/
+engine-csharp/wwwroot/Images/
+engine-csharp/wwwroot/sounds/
+
