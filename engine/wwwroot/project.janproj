@@ -1,0 +1,36 @@
+{
+  "gameName": "10005",
+  "author": "",
+  "version": "1.0.0",
+  "engineVersion": "2.0.0",
+  "startDay": "day1",
+  "startScene": "start",
+  "avatarSystem": {
+    "default": "images/av_343131304_1409170206507238_4838583057421520642_n.jpg",
+    "rules": []
+  },
+  "statsSystem": {
+    "stats": [
+      {
+        "id": "QQQQ",
+        "name": "QQQQ",
+        "initial": 0
+      },
+      {
+        "id": "WWW",
+        "name": "WWW",
+        "initial": 0
+      },
+      {
+        "id": "EEEEE",
+        "name": "EEEEE",
+        "initial": 0
+      },
+      {
+        "id": "RRRRR",
+        "name": "RRRRR",
+        "initial": 0
+      }
+    ]
+  }
+}
