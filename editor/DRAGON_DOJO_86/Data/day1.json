@@ -1,4 +1,0 @@
-[
-  { "Id": "start", "SceneTitle": "Dzień 1 - Start", "Background": "images/bg_tutorial.jpg", "Text": "Janusz budzi się.", "Choices": [{"Text": "Dalej", "Next": "koniec_dnia_1"}], "Type": "normal", "Day": 1 },
-  { "Id": "koniec_dnia_1", "SceneTitle": "KONIEC DNIA 1", "Background": "images/bg_tutorial.jpg", "Text": "Koniec dnia 1.", "IsEndDay": true, "Type": "end_of_day", "Day": 1, "Choices": [] }
-]

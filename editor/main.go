@@ -16,7 +16,7 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:            "Edytor Janusza 2.0",
+		Title:            "KIMONO editor 1.0",
 		Width:            1280,
 		Height:           800,
 		MinWidth:         1024,
