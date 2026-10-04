@@ -23,4 +23,9 @@ wailsjs/
 *.swo
 
 # Janusz
-recent.json" > .gitignore
+recent.json" > .gitignore# Prywatne projekty usera - poza repo
+games/
+!games/.gitkeep
+editor/frontend/node_modules/
+editor/build/
+editor/frontend/dist/
