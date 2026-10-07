@@ -138,15 +138,15 @@ function del(id: string) {
 }
 .header{display:flex;flex-direction:column;gap:10px}
 .title-row{display:flex;align-items:center;gap:6px}
-.title{color:#00FF94;font-size:12px;font-family:monospace;letter-spacing:1px;font-weight:800}
+.title{color:#D4A574;font-size:12px;font-family:monospace;letter-spacing:1px;font-weight:800}
 .count{color:#7D8590;font-size:11px;font-family:monospace}
 .actions{display:flex;flex-direction:column;gap:6px}
 .btns{display:flex;gap:6px}
 .input-new{width:100%;height:32px;padding:0 10px;background:#161B22;border:1px solid #21262D;color:#E6EDF3;border-radius:6px;font-size:12px;font-family:monospace;box-sizing:border-box}
-.input-new:focus{outline:none;border-color:#00FF94}
+.input-new:focus{outline:none;border-color:#D4A574}
 .input-new::placeholder{color:#484F58}
 .btn{flex:1;height:32px;padding:0 10px;background:#21262D;border:1px solid #30363D;color:#E6EDF3;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap}
-.btn:hover{border-color:#00FF94;background:#2A313C}
+.btn:hover{border-color:#D4A574;background:#2A313C}
 .btn.end{background:rgba(251,191,36,0.15);border-color:#fbbf24;color:#fbbf24}
 .btn.end:hover{background:rgba(251,191,36,0.25)}
 .list{flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:6px;min-height:0;padding-right:2px}
@@ -163,7 +163,7 @@ function del(id: string) {
   transition:all 0.15s;
 }
 .scene-item:hover{border-color:#30363D;background:#1C2129}
-.scene-item.active{background:#14261E;border-color:#00FF94;border-left-color:#00FF94}
+.scene-item.active{background:#1E1A12;border-color:#D4A574;border-left-color:#D4A574}
 .scene-item.end{border-left-color:#fbbf24;background:#211E0E}
 .scene-item.end.active{background:#2A2310;border-color:#fbbf24}
 .top-row{display:flex;align-items:flex-start;gap:6px;width:100%;min-width:0}
@@ -179,7 +179,7 @@ function del(id: string) {
   min-width:0;
   font-weight:600;
 }
-.scene-item.active .id-full{color:#00FF94}
+.scene-item.active .id-full{color:#D4A574}
 .scene-item.end.active .id-full{color:#fbbf24}
 .bottom-row{display:flex;align-items:center;gap:6px;width:100%;flex-wrap:wrap;padding-left:22px;box-sizing:border-box}
 .tag{background:#fbbf24;color:#000;font-size:8px;padding:2px 5px;border-radius:4px;font-weight:800;letter-spacing:0.5px;flex:0 0 auto}
