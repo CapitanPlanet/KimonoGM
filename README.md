@@ -16,7 +16,7 @@ Non-profitowy projekt. Każdy Janusz może zrobić własną grę.
 
 ## Roadmap
 - [ ] ETAP 1: Monorepo + rename komponentów Vue
-- [ ] ETAP 2: Gry jako projekty w /games
+- [ ] ETAP 2: Gry jako projekty lokalnie, kopiowanie do /games
 - [ ] ETAP 3: Przycisk BUILD -> EXE / WEB (GitHub Pages)
 
 ## GitHub Pages
