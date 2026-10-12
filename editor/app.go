@@ -55,8 +55,12 @@ func (a *App) GetDefaultProjectPath() string {
 	return games
 }
 func (a *App) OpenProjectFolder(path string) error {
-	if path == "" { path = a.projectPath }
-	if path == "" { return fmt.Errorf("brak sciezki projektu") }
+	if path == "" {
+		path = a.projectPath
+	}
+	if path == "" {
+		return fmt.Errorf("brak sciezki projektu")
+	}
 	cleanPath := filepath.Clean(path)
 	var cmd *exec.Cmd
 	switch goruntime.GOOS {
@@ -77,24 +81,36 @@ func (a *App) SelectFolder() (string, error) {
 
 // HELPERS for assets.go, io.go, audio.go
 func (a *App) cleanAssetPath(p string) string {
-	if p == "" { return "" }
+	if p == "" {
+		return ""
+	}
 	clean := filepath.Clean(strings.TrimSpace(p))
 	clean = strings.ReplaceAll(clean, "\\", "/")
 	clean = strings.TrimPrefix(clean, "/")
 	return clean
 }
 func (a *App) isInsideProject(absPath string) bool {
-	if a.projectPath == "" { return false }
+	if a.projectPath == "" {
+		return false
+	}
 	absPath = filepath.Clean(absPath)
 	proj := filepath.Clean(a.projectPath)
 	rel, err := filepath.Rel(proj, absPath)
-	if err != nil { return false }
-	if rel == "." { return true }
-	if strings.HasPrefix(rel, "..") { return false }
+	if err != nil {
+		return false
+	}
+	if rel == "." {
+		return true
+	}
+	if strings.HasPrefix(rel, "..") {
+		return false
+	}
 	return true
 }
 func (a *App) safeJoin(elems ...string) (string, error) {
-	if len(elems) == 0 { return "", fmt.Errorf("pusta sciezka") }
+	if len(elems) == 0 {
+		return "", fmt.Errorf("pusta sciezka")
+	}
 	joined := filepath.Join(elems...)
 	clean := filepath.Clean(joined)
 	if a.projectPath != "" {
@@ -104,7 +120,6 @@ func (a *App) safeJoin(elems ...string) (string, error) {
 			abs = filepath.Clean(abs)
 		}
 		if !a.isInsideProject(abs) {
-			// pozwol jesli to plik w Data/images
 			if !strings.HasPrefix(abs, filepath.Clean(a.projectPath)) {
 				return "", fmt.Errorf("sciezka poza projektem: %s", clean)
 			}
@@ -113,23 +128,53 @@ func (a *App) safeJoin(elems ...string) (string, error) {
 	}
 	return clean, nil
 }
+
 // RECENT
 type RecentProject struct {
 	Path string `json:"path"`
 	Name string `json:"name"`
 }
+
 func (a *App) recentFilePath() string {
 	if configDir, err := os.UserConfigDir(); err == nil {
 		return filepath.Join(configDir, "KimonoGM", "recent.json")
 	}
 	return filepath.Join(os.TempDir(), "kimonogm_recent.json")
 }
+func (a *App) RunGame(projectPath string) error {
+	enginePath, _ := filepath.Abs(filepath.Join("..", "engine", "MakerEngine.csproj"))
+	if _, err := os.Stat(enginePath); err != nil {
+		enginePath, _ = filepath.Abs(filepath.Join("..", "..", "engine", "MakerEngine.csproj"))
+	}
+	cmd := exec.Command("dotnet", "run", "--project", enginePath, fmt.Sprintf("-p:GameAssetsRoot=%s", projectPath), "--urls", "http://localhost:5020")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Start()
+}
+
+func (a *App) BuildGame(projectPath string) error {
+	enginePath, _ := filepath.Abs(filepath.Join("..", "engine", "MakerEngine.csproj"))
+	if _, err := os.Stat(enginePath); err != nil {
+		enginePath, _ = filepath.Abs(filepath.Join("..", "..", "engine", "MakerEngine.csproj"))
+	}
+	projectName := filepath.Base(projectPath)
+	out, _ := filepath.Abs(filepath.Join(filepath.Dir(projectPath), "..", "dist", projectName))
+	os.MkdirAll(out, 0755)
+	cmd := exec.Command("dotnet", "publish", enginePath, fmt.Sprintf("-p:GameAssetsRoot=%s", projectPath), "-c", "Release", "-o", out)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
 func (a *App) GetRecentProjects() []RecentProject {
 	path := a.recentFilePath()
 	b, err := os.ReadFile(path)
-	if err != nil { return []RecentProject{} }
+	if err != nil {
+		return []RecentProject{}
+	}
 	var list []RecentProject
-	if err := json.Unmarshal(b, &list); err != nil { return []RecentProject{} }
+	if err := json.Unmarshal(b, &list); err != nil {
+		return []RecentProject{}
+	}
 	return list
 }
 func (a *App) AddRecentProject(projectPath string) error {
@@ -148,7 +193,7 @@ func (a *App) AddRecentProject(projectPath string) error {
 }
 func (a *App) ClearRecentProjects() error { return os.Remove(a.recentFilePath()) }
 
-// PROJECT CREATION
+// PROJECT CREATION - FIXED: AUTO 1 BG + 1 AV (av_tutorial.webp priority)
 func (a *App) CreateProject(basePath string, name string) error {
 	basePath = filepath.Clean(basePath)
 	for _, d := range []string{"Data", "images", filepath.Join("sounds", "sfx"), filepath.Join("sounds", "voice"), filepath.Join("sounds", "music")} {
@@ -156,43 +201,14 @@ func (a *App) CreateProject(basePath string, name string) error {
 			return err
 		}
 	}
-	janprojContent := fmt.Sprintf(`{
-  "gameName": "%s",
-  "author": "",
-  "version": "1.0.0",
-  "engineVersion": "2.0.0",
-  "startDay": "day1",
-  "startScene": "start",
-  "statsSystem": { "stats": [ {"id": "CEBULA", "name": "CEBULA", "initial": 0}, {"id": "WSTYD", "name": "WSTYD", "initial": 0}, {"id": "PORTFEL", "name": "PORTFEL", "initial": 100}, {"id": "REPUTACJA", "name": "REPUTACJA", "initial": 0} ] },
-  "avatarSystem": {"default": "", "rules": []}
-}`, name)
 
-	if err := os.WriteFile(filepath.Join(basePath, "project.janproj"), []byte(janprojContent), 0644); err != nil {
-		return err
-	}
-
-	day1Content := `[
-  { "Id": "start", "SceneTitle": "Manieczki - Wejscie", "Background": "images/bg_tutorial.webp", "Text": "Wchodzisz do Manieczek. Kula dysko kreci sie nad glowa, a przy barze kolejka jak za komuny. Janusz w zlotym kimono juz tanczy.", "Choices": [{"Text": "Zamow oranzade przy barze", "Next": "bar"}, {"Text": "Wbij na parkiet", "Next": "parkiet"}], "Type": "normal", "Day": 1 },
-  { "Id": "bar", "SceneTitle": "Kolejka przy barze", "Background": "images/bg_tutorial.webp", "Text": "Stoisz w kolejce. Barmanka w kolorowym dresie nalewa cos co wyglada jak oranzada ale pachnie jak bimber.", "Choices": [{"Text": "Pogadaj z barmanka", "Next": "koniec_dnia_1"}], "Type": "normal", "Day": 1 },
-  { "Id": "parkiet", "SceneTitle": "Parkiet", "Background": "images/bg_tutorial.webp", "Text": "Parkiet pelen. Tancerz w zlotym kimono robi piruet i patrzy na Ciebie.", "Choices": [{"Text": "Zatancz", "Next": "koniec_dnia_1"}], "Type": "normal", "Day": 1 },
-  { "Id": "koniec_dnia_1", "SceneTitle": "KONIEC DNIA 1", "Background": "images/bg_tutorial.webp", "Text": "Pierwsza noc w Manieczkach zaliczona.", "IsEndDay": true, "Type": "end_of_day", "Day": 1, "Choices": [] }
-]`
-	if err := os.WriteFile(filepath.Join(basePath, "Data", "day1.json"), []byte(day1Content), 0644); err != nil {
-		return err
-	}
-
-	manifest := `{
-  "days": ["day1"],
-  "startDay": "day1",
-  "startScene": "start",
-  "version": "2026-10-04T00:00:00.000Z"
-}`
-	_ = os.WriteFile(filepath.Join(basePath, "Data", "_manifest.json"), []byte(manifest), 0644)
-
+	// 1. KOPIUJ Z frontend/src/assets -> images/
 	srcAssets := "frontend/src/assets"
 	if _, err := os.Stat(srcAssets); err == nil {
 		_ = filepath.Walk(srcAssets, func(p string, info fs.FileInfo, err error) error {
-			if err != nil || info.IsDir() { return nil }
+			if err != nil || info.IsDir() {
+				return nil
+			}
 			low := strings.ToLower(info.Name())
 			if !(strings.HasSuffix(low, ".webp") || strings.HasSuffix(low, ".png") || strings.HasSuffix(low, ".jpg") || strings.HasSuffix(low, ".jpeg")) {
 				return nil
@@ -206,6 +222,96 @@ func (a *App) CreateProject(basePath string, name string) error {
 			return nil
 		})
 	}
+
+	// 2. WYBIERZ DEFAULTY - TWOJ av_tutorial.webp MA PRIORYTET
+	defaultBG := ""
+	defaultAV := ""
+
+	imagesDir := filepath.Join(basePath, "images")
+	if files, err := os.ReadDir(imagesDir); err == nil {
+		// najpierw szukaj dokładnie av_tutorial i bg_tutorial
+		for _, f := range files {
+			if f.IsDir() {
+				continue
+			}
+			ln := strings.ToLower(f.Name())
+			if ln == "av_tutorial.webp" || ln == "av_tutorial.png" || ln == "av_tutorial.jpg" {
+				defaultAV = "images/" + f.Name()
+			}
+			if ln == "bg_tutorial.webp" || ln == "bg_tutorial.png" || ln == "bg_tutorial.jpg" {
+				defaultBG = "images/" + f.Name()
+			}
+		}
+		// potem pierwszy av_ / bg_
+		for _, f := range files {
+			if f.IsDir() {
+				continue
+			}
+			n := strings.ToLower(f.Name())
+			if defaultAV == "" && strings.HasPrefix(n, "av_") {
+				defaultAV = "images/" + f.Name()
+			}
+			if defaultBG == "" && strings.HasPrefix(n, "bg_") {
+				defaultBG = "images/" + f.Name()
+			}
+		}
+		// fallback - cokolwiek
+		if defaultBG == "" {
+			for _, f := range files {
+				if !f.IsDir() {
+					n := strings.ToLower(f.Name())
+					if strings.HasSuffix(n, ".webp") || strings.HasSuffix(n, ".jpg") || strings.HasSuffix(n, ".png") {
+						defaultBG = "images/" + f.Name()
+						break
+					}
+				}
+			}
+		}
+	}
+
+	if defaultBG == "" {
+		defaultBG = "images/bg_tutorial.webp"
+	}
+	if defaultAV == "" {
+		defaultAV = "images/av_tutorial.webp"
+	}
+
+	// 3. PROJECT.JANPROJ Z AUTOMATYCZNYM AVATAREM
+	janprojContent := fmt.Sprintf(`{
+  "gameName": "%s",
+  "author": "",
+  "version": "1.0.0",
+  "engineVersion": "2.0.0",
+  "startDay": "day1",
+  "startScene": "start",
+  "statsSystem": { "stats": [ {"id": "CEBULA", "name": "CEBULA", "initial": 0}, {"id": "WSTYD", "name": "WSTYD", "initial": 0}, {"id": "PORTFEL", "name": "PORTFEL", "initial": 100}, {"id": "REPUTACJA", "name": "REPUTACJA", "initial": 0} ] },
+  "avatarSystem": {"default": "%s", "rules": []}
+}`, name, defaultAV)
+
+	if err := os.WriteFile(filepath.Join(basePath, "project.janproj"), []byte(janprojContent), 0644); err != nil {
+		return err
+	}
+
+	// 4. DAY1 Z TYM TŁEM
+	day1Content := fmt.Sprintf(`[
+  { "Id": "start", "SceneTitle": "Manieczki - Wejscie", "Background": "%s", "Text": "Wchodzisz do Manieczek. Kula dysko kreci sie nad glowa, a przy barze kolejka jak za komuny. Janusz w zlotym kimono juz tanczy.", "Choices": [{"Text": "Zamow oranzade przy barze", "Next": "bar"}, {"Text": "Wbij na parkiet", "Next": "parkiet"}], "Type": "normal", "Day": 1 },
+  { "Id": "bar", "SceneTitle": "Kolejka przy barze", "Background": "%s", "Text": "Stoisz w kolejce. Barmanka w kolorowym dresie nalewa cos co wyglada jak oranzada ale pachnie jak bimber.", "Choices": [{"Text": "Pogadaj z barmanka", "Next": "koniec_dnia_1"}], "Type": "normal", "Day": 1 },
+  { "Id": "parkiet", "SceneTitle": "Parkiet", "Background": "%s", "Text": "Parkiet pelen. Tancerz w zlotym kimono robi piruet i patrzy na Ciebie.", "Choices": [{"Text": "Zatancz", "Next": "koniec_dnia_1"}], "Type": "normal", "Day": 1 },
+  { "Id": "koniec_dnia_1", "SceneTitle": "KONIEC DNIA 1", "Background": "%s", "Text": "Pierwsza noc w Manieczkach zaliczona.", "IsEndDay": true, "Type": "end_of_day", "Day": 1, "Choices": [] }
+]`, defaultBG, defaultBG, defaultBG, defaultBG)
+
+	if err := os.WriteFile(filepath.Join(basePath, "Data", "day1.json"), []byte(day1Content), 0644); err != nil {
+		return err
+	}
+
+	manifest := `{
+  "days": ["day1"],
+  "startDay": "day1",
+  "startScene": "start",
+  "version": "2026-10-04T00:00:00.000Z"
+}`
+	_ = os.WriteFile(filepath.Join(basePath, "Data", "_manifest.json"), []byte(manifest), 0644)
+
 	a.projectPath = basePath
 	_ = a.AddRecentProject(basePath)
 	return nil

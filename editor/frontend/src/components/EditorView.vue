@@ -5,13 +5,15 @@ import SceneList from './SceneList.vue'
 import SceneCanvas from './SceneCanvas.vue'
 import ChoicesEditor from './ChoicesEditor.vue'
 import { useProjectStore } from '../stores/projectStore'
-import { OpenProjectFolder } from '../../wailsjs/go/main/App'
+import { OpenProjectFolder, RunGame, BuildGame } from '../../wailsjs/go/main/App'
 import tutorialBasic from '../assets/tutorial_basic.jpg'
+import JanuszModal from './JanuszModal.vue'
 
 const store = useProjectStore()
 const emit = defineEmits(['go-to-menu'])
 const showSavedToast = ref(false)
 const showTutorial = ref(false)
+const isRunning = ref(false)
 const absurdIndex = ref(0)
 const absurdBadges = ['NO PAIN NO KIEŁBASA','RAN FOR JUR LAJF','FAJT KLUB MANIECKI','ZŁOTE KIMONO TEAM','PARKIET 02:17',]
 const currentAbsurd = computed(() => absurdBadges[absurdIndex.value])
@@ -20,6 +22,17 @@ const isLoaded = computed(() => !!store.meta && !!store.projectPath)
 onMounted(() => { if (!(store as any).currentDayId && (store as any).days?.length) { ;(store as any).currentDayId = (store as any).days[0].id } })
 async function saveProject() { try { await store.saveProject(); showSavedToast.value = true; setTimeout(() => { showSavedToast.value = false }, 2000) } catch (e) { alert('Błąd zapisu: ' + e) } }
 async function openFolder() { if (!store.projectPath) return; try { await OpenProjectFolder(store.projectPath) } catch (e) { console.warn(e) } }
+
+async function runParkiet(e: MouseEvent) {
+  const isBuild = e.shiftKey
+  if (!store.projectPath) { alert('Brak ścieżki projektu'); return }
+  try {
+    isRunning.value = true
+    if (isBuild) { await BuildGame(store.projectPath); alert('✓ Zbudowano w dist/') }
+    else { await saveProject(); await RunGame(store.projectPath); setTimeout(() => window.open('http://localhost:5020','_blank'), 2500) }
+  } catch (err: any) { alert('Błąd: '+err.message) }
+  finally { setTimeout(()=>isRunning.value=false,3000) }
+}
 </script>
 
 <template>
@@ -28,11 +41,16 @@ async function openFolder() { if (!store.projectPath) return; try { await OpenPr
       <div class="neon-tube"></div>
       <div class="top-bar-inner">
         <div class="top-bar-left">
+          <!-- PEŁNA ŚCIEŻKA NA POCZĄTKU - ZIELONY LINK -->
+          <div class="project-path clickable green-link" @click="openFolder" :title="store.projectPath || 'Kliknij aby otworzyć folder'">
+            <span class="folder-icon">📁</span>
+            <span class="path-full">{{ store.projectPath || 'test / test' }}</span>
+          </div>
+
           <div class="logo-wrap">
             <div class="absurd-badge" @click="cycleAbsurd"><div class="absurd-label">SEKCJA</div><div class="absurd-text">{{ currentAbsurd }}</div></div>
             <div class="logo-main"><h1>KIMONO</h1><span class="ver">editor 1.0</span><span class="vhs">VHS • 1994</span></div>
           </div>
-          <div class="project-path clickable" @click="openFolder"><span>test</span><span class="path-text">{{ store.projectPath ? ' / ' + store.projectPath.split('/').pop() : '' }}</span></div>
         </div>
         <div class="top-bar-center"><div class="fight-badge"><span class="dot"></span>MANIECKI • 02:17 • PARKIET</div></div>
         <div class="top-bar-right"></div>
@@ -60,13 +78,19 @@ async function openFolder() { if (!store.projectPath) return; try { await OpenPr
       <div class="obi-content">
         <button @click="saveProject" class="btn-footer save">💾 ZAPISZ PROJEKT</button>
         
-        <!-- MENU - CIEMNY W RAMCE -->
         <div class="menu-frame">
           <button @click="emit('go-to-menu')" class="btn-footer menu dark-framed">📁 MENU</button>
         </div>
 
         <button @click="showTutorial = true" class="btn-footer tutorial">📖 POKAŻ TUTORIAL</button>
         
+        <div class="obi-spacer"></div>
+
+        <button @click="runParkiet" :disabled="isRunning" class="btn-footer parkiet olive" :class="{ running: isRunning }" title="Klik = Odpal grę na :5020 | Shift+Klik = Build">
+          <span v-if="!isRunning">▶ WPUŚĆ NA PARKIET</span>
+          <span v-else>● ODPALAM...</span>
+        </button>
+
         <div class="obi-maker-tag">
           <div class="tag-inner"><span class="kanji">武道</span><span class="maker">KIMONO</span></div>
         </div>
@@ -80,7 +104,9 @@ async function openFolder() { if (!store.projectPath) return; try { await OpenPr
         <img :src="tutorialBasic" alt="Instrukcja" class="tutorial-img" />
       </div>
     </div>
+    <JanuszModal />
   </div>
+
 </template>
 
 <style>
@@ -98,6 +124,47 @@ body { background:var(--bg); margin:0; color:var(--text); overflow-x:hidden; }
 @keyframes tube-flow { 0% { background-position: 0% 0%; } 100% { background-position: 200% 0%; } }
 .top-bar-inner { padding:10px 16px; display:flex; align-items:center; justify-content:space-between; }
 .top-bar-left { display:flex; align-items:center; gap:18px; }
+
+/* ZIELONY LINK - NA POCZĄTKU - PEŁNA ŚCIEŻKA */
+.project-path.green-link {
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(34, 197, 94, 0.08);
+  border: 1.5px solid rgba(34, 197, 94, 0.3);
+  padding: 6px 12px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  max-width: 480px;
+  overflow: hidden;
+  font-family: 'JetBrains Mono', monospace;
+}
+.project-path.green-link:hover {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: #22c55e;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.25), 0 2px 0 #000;
+  transform: translateY(-1px);
+}
+.project-path.green-link:active { transform: translateY(0); }
+.folder-icon { font-size: 12px; flex-shrink: 0; }
+.path-full {
+  color: #22c55e;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: underline;
+  text-decoration-color: rgba(34, 197, 94, 0.35);
+  text-underline-offset: 3px;
+  letter-spacing: 0.01em;
+}
+.project-path.green-link:hover .path-full {
+  color: #4ade80;
+  text-decoration-color: #22c55e;
+}
+
 .logo-wrap { display:flex; align-items:center; gap:12px; }
 .absurd-badge { background:#16131F; border:1px solid #2A2440; padding:4px 8px; border-radius:4px; cursor:pointer; user-select:none; }
 .absurd-label { font-size:7px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; }
@@ -106,14 +173,12 @@ body { background:var(--bg); margin:0; color:var(--text); overflow-x:hidden; }
 .logo-main h1 { font-family:'Bebas Neue',sans-serif; font-size:22px; margin:0; letter-spacing:0.06em; }
 .ver { font-size:10px; color:var(--mustard); font-family:'JetBrains Mono',monospace; }
 .vhs { font-size:9px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; }
-.project-path { font-size:12px; color:var(--text-dim); cursor:pointer; }
-.project-path span:first-child { color:var(--mustard); font-weight:600; }
 .fight-badge { font-size:10px; background:#1a1626; border:1px solid #2A2440; padding:4px 10px; border-radius:12px; display:flex; align-items:center; gap:6px; font-family:'JetBrains Mono',monospace; color:var(--text-dim); }
 .fight-badge .dot { width:6px; height:6px; background:#ff2e63; border-radius:50%; display:inline-block; box-shadow:0 0 6px #ff2e63; animation: blink 1.2s infinite; }
 @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
 .loading { flex:1; display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-family:'JetBrains Mono',monospace; }
 
-/* ========== OBI 2.7 - DARK MENU W RAMCE ========== */
+/* ========== OBI 2.7 ========== */
 .bottom-bar.kohaku-obi-2.kohaku-striped.dark {
   height: 60px;
   background: #1a1214;
@@ -155,84 +220,48 @@ body { background:var(--bg); margin:0; color:var(--text); overflow-x:hidden; }
 .dark .obi-h5 { position:absolute; inset:0; display:flex; flex-direction:column; justify-content:space-between; padding:6px 0; pointer-events:none; z-index:3; }
 .dark .obi-h5 .h-line { height:0; border-top:1px solid rgba(0,0,0,0.55); width:100%; box-shadow: 0 1px 0 rgba(255,255,255,0.12); }
 .dark .obi-h5 .h-line.mid { border-top:1.5px solid rgba(0,0,0,0.7); box-shadow: 0 1px 0 rgba(255,255,255,0.18); }
-
 .obi-content { position:relative; z-index:5; display:flex; width:100%; justify-content:flex-start; align-items:center; gap:12px; }
-
-/* PRZYCISKI */
+.obi-spacer { flex: 1; }
 .btn-footer {
   height:36px; padding:0 18px; font-size:11px; font-weight:800; border-radius:2px;
   display:flex; gap:8px; align-items:center; letter-spacing:0.06em; text-transform:uppercase;
   font-family:'JetBrains Mono',monospace; cursor:pointer; transition: all 0.15s ease;
+  white-space: nowrap;
 }
 .btn-footer.save {
   background:#0a0a0a; border:1.5px solid #D4A574; color:#e7dcc0;
   box-shadow: 0 2px 0 #000, 0 4px 12px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1);
 }
 .btn-footer.save:hover { background:#151310; border-color:#E7C36A; transform: translateY(-1px); box-shadow: 0 3px 0 #000, 0 6px 16px rgba(0,0,0,0.7); }
-
-/* ===== MENU - CIEMNY W RAMCE ===== */
 .menu-frame {
-  position: relative;
-  padding: 3px;
-  background: #f0ece1; /* jasna ramka zewnętrzna - jak obwódka pasa */
-  border: 2px solid #000;
-  border-radius: 3px;
-  box-shadow: 
-    0 2px 0 #000,
-    0 4px 10px rgba(0,0,0,0.5),
-    inset 0 1px 0 rgba(255,255,255,0.8);
-  transform: rotate(-0.5deg); /* lekko krzywo jak naszywka */
+  position: relative; padding: 3px; background: #f0ece1; border: 2px solid #000; border-radius: 3px;
+  box-shadow: 0 2px 0 #000, 0 4px 10px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.8); transform: rotate(-0.5deg);
 }
-.menu-frame::before {
-  content: '';
-  position: absolute;
-  inset: 2px;
-  border: 1px dashed rgba(0,0,0,0.25);
-  pointer-events: none;
-  border-radius: 1px;
-}
+.menu-frame::before { content: ''; position: absolute; inset: 2px; border: 1px dashed rgba(0,0,0,0.25); pointer-events: none; border-radius: 1px; }
 .btn-footer.menu.dark-framed {
-  background: #0e0e0e;
-  border: 1.5px solid #1a1a1a;
-  color: #f0ece1;
-  height: 30px;
-  min-width: 90px;
-  justify-content: center;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -1px 0 rgba(0,0,0,0.8);
-  margin: 0;
-  position: relative;
+  background: #0e0e0e; border: 1.5px solid #1a1a1a; color: #f0ece1; height: 30px; min-width: 90px; justify-content: center;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -1px 0 rgba(0,0,0,0.8); margin: 0; position: relative;
 }
-.btn-footer.menu.dark-framed:hover {
-  background: #1a1a1a;
-  color: #fff;
-  border-color: #333;
-  transform: translateY(-1px);
-}
-.btn-footer.menu.dark-framed:active { transform: translateY(0); }
-
+.btn-footer.menu.dark-framed:hover { background: #1a1a1a; color: #fff; border-color: #333; transform: translateY(-1px); }
 .btn-footer.tutorial {
   background:#1a0a0e; border:1.5px solid #a81c32; color:#ffdde0;
   box-shadow: 0 2px 0 #000, 0 4px 10px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
 }
 .btn-footer.tutorial:hover { background:#2a0e16; border-color:#ce223c; transform: translateY(-1px); }
-
-/* METKA */
+.btn-footer.parkiet {
+  height: 36px; background: #22281a; border: 1.5px solid #8a9a5b; color: #d5d8a0;
+  box-shadow: 0 2px 0 #000, 0 4px 12px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.btn-footer.parkiet:hover { background: #2f3a1f; border-color: #a8b87a; color: #e8ebc0; transform: translateY(-1px); box-shadow: 0 3px 0 #000, 0 6px 16px rgba(0,0,0,0.7); }
+.btn-footer.parkiet.running { background: #000; border-color: #383f26; color: #383f26; animation: blink 0.7s infinite; pointer-events: none; }
 .obi-maker-tag {
-  margin-left: auto;
-  background:#0a0a0a; border:1.5px solid #222; padding:4px 10px 4px 8px;
-  display:flex; align-items:center; transform: rotate(-1.5deg);
-  box-shadow: 0 2px 0 #000, 0 3px 8px rgba(0,0,0,0.6);
-  position:relative;
+  margin-left: 12px; background:#0a0a0a; border:1.5px solid #222; padding:4px 10px 4px 8px;
+  display:flex; align-items:center; transform: rotate(-1.5deg); box-shadow: 0 2px 0 #000, 0 3px 8px rgba(0,0,0,0.6); position:relative;
 }
-.obi-maker-tag::before {
-  content:'320'; position:absolute; top:-8px; right:-6px;
-  background:#f0ece1; color:#111; font-size:7px; font-weight:900; padding:1px 4px;
-  border:1px solid #000; font-family:'JetBrains Mono',monospace; transform: rotate(3deg);
-}
+.obi-maker-tag::before { content:'320'; position:absolute; top:-8px; right:-6px; background:#f0ece1; color:#111; font-size:7px; font-weight:900; padding:1px 4px; border:1px solid #000; font-family:'JetBrains Mono',monospace; transform: rotate(3deg); }
 .tag-inner { display:flex; flex-direction:column; align-items:center; line-height:1; }
 .kanji { font-size:16px; color:#c9a84c; font-weight:900; letter-spacing:0.1em; text-shadow: 0 1px 0 #000; }
 .maker { font-size:7px; color:#e8e0d0; letter-spacing:0.15em; font-family:'JetBrains Mono',monospace; margin-top:2px; }
-
 .toast-saved { position:fixed; bottom:74px; right:20px; background:var(--card); border:1px solid var(--mustard); color:var(--mustard); padding:10px 16px; border-radius:6px; z-index:200; font-family:'JetBrains Mono',monospace; }
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.9); display:flex; align-items:center; justify-content:center; z-index:300; }
 .modal-content { background:#0d1117; border-radius:8px; border:1px solid var(--border); max-width:95vw; max-height:95vh; overflow:auto; position:relative; }
