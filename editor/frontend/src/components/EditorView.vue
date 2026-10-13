@@ -23,15 +23,33 @@ onMounted(() => { if (!(store as any).currentDayId && (store as any).days?.lengt
 async function saveProject() { try { await store.saveProject(); showSavedToast.value = true; setTimeout(() => { showSavedToast.value = false }, 2000) } catch (e) { alert('Błąd zapisu: ' + e) } }
 async function openFolder() { if (!store.projectPath) return; try { await OpenProjectFolder(store.projectPath) } catch (e) { console.warn(e) } }
 
+const statusMsg = ref('')
+
+
 async function runParkiet(e: MouseEvent) {
   const isBuild = e.shiftKey
   if (!store.projectPath) { alert('Brak ścieżki projektu'); return }
   try {
     isRunning.value = true
-    if (isBuild) { await BuildGame(store.projectPath); alert('✓ Zbudowano w dist/') }
-    else { await saveProject(); await RunGame(store.projectPath); setTimeout(() => window.open('http://localhost:5020','_blank'), 2500) }
-  } catch (err: any) { alert('Błąd: '+err.message) }
-  finally { setTimeout(()=>isRunning.value=false,3000) }
+    if (isBuild) { 
+      statusMsg.value = '● BUILD RELEASE...'
+      await BuildGame(store.projectPath); 
+      statusMsg.value = '✓ Zbudowano w dist/'
+      setTimeout(()=> statusMsg.value='', 2500)
+    } else { 
+      await saveProject(); 
+      statusMsg.value = '● BUDUJĘ PARKIET... (Go czeka na :5020)'
+      await RunGame(store.projectPath); // Go czeka 45s na port, bez CORS
+      statusMsg.value = '✓ PARKIET GOTOWY'
+      window.open(`http://localhost:5020/?nocache=${Date.now()}`, '_blank')
+      setTimeout(()=> statusMsg.value='', 2500)
+    }
+  } catch (err: any) { 
+    statusMsg.value = '⚠ ' + err.message
+    alert('Błąd: '+err.message) 
+  } finally { 
+    setTimeout(()=>isRunning.value=false, 1000) 
+  }
 }
 </script>
 
@@ -52,7 +70,7 @@ async function runParkiet(e: MouseEvent) {
             <div class="logo-main"><h1>KIMONO</h1><span class="ver">editor 1.0</span><span class="vhs">VHS • 1994</span></div>
           </div>
         </div>
-        <div class="top-bar-center"><div class="fight-badge"><span class="dot"></span>MANIECKI • 02:17 • PARKIET</div></div>
+        <div class="top-bar-center"><div class="fight-badge"><span class="dot"></span>MANIECKI • 02:17 • PARKIET</div><div v-if="statusMsg" class="status-msg">{{ statusMsg }}</div></div>
         <div class="top-bar-right"></div>
       </div>
     </header>
@@ -174,6 +192,7 @@ body { background:var(--bg); margin:0; color:var(--text); overflow-x:hidden; }
 .ver { font-size:10px; color:var(--mustard); font-family:'JetBrains Mono',monospace; }
 .vhs { font-size:9px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; }
 .fight-badge { font-size:10px; background:#1a1626; border:1px solid #2A2440; padding:4px 10px; border-radius:12px; display:flex; align-items:center; gap:6px; font-family:'JetBrains Mono',monospace; color:var(--text-dim); }
+.status-msg { margin-left:16px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#D4A574; background:#1a1510; border:1px solid #2a2015; padding:4px 8px; border-radius:4px; white-space:nowrap; }
 .fight-badge .dot { width:6px; height:6px; background:#ff2e63; border-radius:50%; display:inline-block; box-shadow:0 0 6px #ff2e63; animation: blink 1.2s infinite; }
 @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
 .loading { flex:1; display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-family:'JetBrains Mono',monospace; }
