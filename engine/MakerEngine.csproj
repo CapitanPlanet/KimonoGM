@@ -4,9 +4,18 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <DefaultItemExcludes>$(DefaultItemExcludes);Tools\**;bin\**;obj\**</DefaultItemExcludes>
-    <BaseIntermediateOutputPath>obj\Janusz\</BaseIntermediateOutputPath>
-    <!-- PARAMETR: skąd brać assety. Default = Assets (prod GitLab) -->
+    <!-- FIX: usuniete BaseIntermediateOutputPath = obj\Janusz\ ktore robilo MSB3539 i rozwalalo wwwroot -->
+    
+    <!-- PARAMETR: skąd brać assety. Default = Assets (prod) -->
     <GameAssetsRoot Condition="'$(GameAssetsRoot)' == ''">Assets</GameAssetsRoot>
+
+    <!-- FIX: localhost:5020 - wylaczamy trimming ktory cial Ci MakerEngine.wasm do 107kB i biala strona -->
+    <PublishTrimmed>false</PublishTrimmed>
+    <BlazorWebAssemblyEnableTrimming>false</BlazorWebAssemblyEnableTrimming>
+    <PublishTrimmed Condition="'$(Configuration)'=='Release'">false</PublishTrimmed>
+    <BlazorWebAssemblyEnableTrimming Condition="'$(Configuration)'=='Release'">false</BlazorWebAssemblyEnableTrimming>
+    <TrimMode>full</TrimMode>
+    <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,20 +32,31 @@
     <DataFiles Include="$(GameAssetsRoot)\*.json" />
   </ItemGroup>
 
-  <Target Name="JanuszClean" BeforeTargets="PrepareForBuild;ResolveStaticWebAssetsInputs;DefineStaticWebAssets;BeforeBuild">
-    <Delete Files="wwwroot\data\**\*.*;wwwroot\sounds\**\*.*;" />
-    <RemoveDir Directories="wwwroot\sounds\lektor;wwwroot\sounds;wwwroot\data" />
+  <!-- FIX: czyszczenie bez wywalania StaticWebAssets -->
+  <Target Name="JanuszClean" BeforeTargets="PrepareForBuild;ResolveStaticWebAssetsInputs;BeforeBuild">
+    <ItemGroup>
+      <OldDataFiles Include="wwwroot\data\**\*.*" />
+      <OldSoundFiles Include="wwwroot\sounds\**\*.*" />
+    </ItemGroup>
+    <Delete Files="@(OldDataFiles);@(OldSoundFiles)" Condition="Exists('wwwroot\data')" />
+    <Delete Files="@(OldDataFiles);@(OldSoundFiles)" Condition="Exists('wwwroot\sounds')" />
   </Target>
 
   <Target Name="CopyGameAssets" BeforeTargets="PrepareForBuild;BeforeBuild" DependsOnTargets="JanuszClean">
     <MakeDir Directories="wwwroot\images;wwwroot\Images;wwwroot\data;wwwroot\sounds" />
     <Copy SourceFiles="@(GameImages)" DestinationFolder="wwwroot\images\%(RecursiveDir)" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(GameImages)" DestinationFolder="wwwroot\Images\%(RecursiveDir)" SkipUnchangedFiles="false" />
-    <Copy SourceFiles="@(SoundFiles)" DestinationFolder="wwwroot\sounds\%(RecursiveDir)" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="@(SoundFiles)" DestinationFolder="wwwroot\sounds\%(RecursiveDir)" SkipUnchangedFiles="false" Condition="Exists('$(GameAssetsRoot)\sounds')" />
     <Copy SourceFiles="@(DataFiles)" DestinationFolder="wwwroot\data\%(RecursiveDir)" SkipUnchangedFiles="false" />
     <Copy SourceFiles="$(GameAssetsRoot)\project.janproj" DestinationFolder="wwwroot" SkipUnchangedFiles="false" Condition="Exists('$(GameAssetsRoot)\project.janproj')" />
     <Copy SourceFiles="$(GameAssetsRoot)\Data\project.janproj" DestinationFolder="wwwroot\data" SkipUnchangedFiles="false" Condition="Exists('$(GameAssetsRoot)\Data\project.janproj')" />
     <Copy SourceFiles="$(GameAssetsRoot)\data\project.janproj" DestinationFolder="wwwroot\data" SkipUnchangedFiles="false" Condition="Exists('$(GameAssetsRoot)\data\project.janproj')" />
     <Message Text="COPIED FROM $(GameAssetsRoot) -> wwwroot: @(DataFiles)" Importance="high" />
+  </Target>
+
+  <!-- FIX: jesli nie ma assetow, stworz placeholder zeby StaticWebAssets nie rzucal No file exists -->
+  <Target Name="EnsureDataPlaceholder" AfterTargets="CopyGameAssets" BeforeTargets="ResolveStaticWebAssetsInputs">
+    <MakeDir Directories="wwwroot\data" />
+    <WriteLinesToFile File="wwwroot\data\.keep" Lines="keep" Overwrite="false" Condition="!Exists('wwwroot\data\project.janproj') AND !Exists('wwwroot\data\day1.json')" />
   </Target>
 </Project>

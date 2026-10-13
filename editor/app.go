@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"io"
+	"time"
 	goruntime "runtime"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -142,14 +144,45 @@ func (a *App) recentFilePath() string {
 	return filepath.Join(os.TempDir(), "kimonogm_recent.json")
 }
 func (a *App) RunGame(projectPath string) error {
-	enginePath, _ := filepath.Abs(filepath.Join("..", "engine", "MakerEngine.csproj"))
-	if _, err := os.Stat(enginePath); err != nil {
-		enginePath, _ = filepath.Abs(filepath.Join("..", "..", "engine", "MakerEngine.csproj"))
-	}
-	cmd := exec.Command("dotnet", "run", "--project", enginePath, fmt.Sprintf("-p:GameAssetsRoot=%s", projectPath), "--urls", "http://localhost:5020")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Start()
+        // zabij poprzednie instancje na 5020
+        exec.Command("taskkill", "/F", "/IM", "MakerEngine.exe").Run()
+        exec.Command("cmd", "/C", "for /f \"tokens=5\" %a in ('netstat -aon ^| findstr :5020') do taskkill /F /PID %a").Run()
+
+        enginePath, _ := filepath.Abs(filepath.Join("..", "engine", "MakerEngine.csproj"))
+        if _, err := os.Stat(enginePath); err != nil {
+                enginePath, _ = filepath.Abs(filepath.Join("..", "..", "engine", "MakerEngine.csproj"))
+        }
+        if _, err := os.Stat(enginePath); err != nil {
+                return fmt.Errorf("nie znaleziono %s: %v", enginePath, err)
+        }
+
+        // forward slashes + cudzysłów dla ścieżek z spacją
+        gp := filepath.ToSlash(projectPath)
+        prop := fmt.Sprintf("-p:GameAssetsRoot=\"%s\"", gp)
+
+        // to samo co Ci działa z konsoli + wyłączony trimming
+        cmd := exec.Command("dotnet", "run", "--project", enginePath, prop, "-p:PublishTrimmed=false", "-p:BlazorWebAssemblyEnableTrimming=false", "--urls", "http://localhost:5020", "--no-launch-profile")
+        cmd.Dir = filepath.Dir(enginePath)
+        // log do pliku żebyś widział w edytorze co się wywala
+        logFile, _ := os.Create(filepath.Join(os.TempDir(), "kimonogm_run.log"))
+        if logFile != nil {
+                cmd.Stdout = io.MultiWriter(os.Stdout, logFile)
+                cmd.Stderr = io.MultiWriter(os.Stderr, logFile)
+        } else {
+                cmd.Stdout = os.Stdout
+                cmd.Stderr = os.Stderr
+        }
+        err := cmd.Start()
+        if err != nil {
+                return err
+        }
+        // daj dotnetowi 2s na wstanie
+        go func() {
+                time.Sleep(2 * time.Second)
+                // nie blokuj
+                cmd.Process.Release()
+        }()
+        return nil
 }
 
 func (a *App) BuildGame(projectPath string) error {
