@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -56,7 +57,6 @@ func main() {
 	engineRoot := filepath.Join(filepath.Dir(filepath.Dir(cwd)), "engine")
 	engineProj := filepath.Join(engineRoot, "MakerEngine.csproj")
 
-	fmt.Printf("[BUILDER] Engine: %s\n", engineProj)
 	fmt.Printf("[BUILDER] Game: %s\n", *gamePath)
 
 	sourceData := ""
@@ -78,98 +78,52 @@ func main() {
 	if sourceData == "" {
 		sourceData = *gamePath
 	}
-	fmt.Printf("[BUILDER] Zrodlo: %s\n", sourceData)
 
-	fmt.Println("[BUILDER] Czyszcze obj/bin/wwwroot/data...")
+	fmt.Println("[BUILDER] Czyszcze obj/bin...")
 	os.RemoveAll(filepath.Join(engineRoot, "obj"))
 	os.RemoveAll(filepath.Join(engineRoot, "bin"))
 	os.RemoveAll(filepath.Join(engineRoot, "wwwroot", "data"))
-	// usun tez stare backupy ktore zostaly
-	os.RemoveAll(filepath.Join(engineRoot, "wwwroot", "data_backup_before_build"))
-	os.RemoveAll(filepath.Join(engineRoot, "Assets_backup_before_build"))
-	os.RemoveAll(filepath.Join(engineRoot, "MakerEngine.csproj_backup_before_build"))
 
 	fmt.Println("[BUILDER] 1/3 dotnet publish...")
 	publishDir := filepath.Join(os.TempDir(), "kimono_publish")
 	os.RemoveAll(publishDir)
-	// FIX: dodaj /p:ErrorOnDuplicatePublishOutputFiles=false i czyscic static web assets
-	cmd := exec.Command("dotnet", "publish", engineProj, "-c", "Release", "-o", publishDir, fmt.Sprintf("-p:GameAssetsRoot=%s", *gamePath), "/p:StaticWebAssetsEnabled=false")
-	// najpierw proba bez StaticWebAssets
+	cmd := exec.Command("dotnet", "publish", engineProj, "-c", "Release", "-o", publishDir, fmt.Sprintf("-p:GameAssetsRoot=%s", *gamePath))
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	err := cmd.Run()
-	if err != nil {
-		// jesli fail z StaticWebAssetsEnabled=false, sprobuj normalnie ale po czyszczeniu
-		fmt.Println("[BUILDER] Retry z normalnym publish po czyszczeniu...")
+	if err := cmd.Run(); err != nil {
 		os.RemoveAll(filepath.Join(engineRoot, "obj"))
+		tmpDataDir := filepath.Join(engineRoot, "wwwroot", "data")
+		os.MkdirAll(tmpDataDir, 0755)
+		os.WriteFile(filepath.Join(tmpDataDir, "day2.json"), []byte("{}"), 0644)
 		cmd2 := exec.Command("dotnet", "publish", engineProj, "-c", "Release", "-o", publishDir, fmt.Sprintf("-p:GameAssetsRoot=%s", *gamePath))
 		cmd2.Stdout = os.Stdout
 		cmd2.Stderr = os.Stderr
-		if err2 := cmd2.Run(); err2 != nil {
-			// jesli dalej blad o day2.json, to znaczy ze w csproj jest hardcoded asset
-			// stworz pusty day2.json tymczasowo zeby publish przeszedl, potem go usuniemy
-			fmt.Println("[BUILDER] FIX: tworze tymczasowy day2.json zeby obejsc StaticWebAssets...")
-			tmpDataDir := filepath.Join(engineRoot, "wwwroot", "data")
-			os.MkdirAll(tmpDataDir, 0755)
-			os.WriteFile(filepath.Join(tmpDataDir, "day2.json"), []byte("{}"), 0644)
-			os.RemoveAll(filepath.Join(engineRoot, "obj"))
-			cmd3 := exec.Command("dotnet", "publish", engineProj, "-c", "Release", "-o", publishDir, fmt.Sprintf("-p:GameAssetsRoot=%s", *gamePath))
-			cmd3.Stdout = os.Stdout
-			cmd3.Stderr = os.Stderr
-			if err3 := cmd3.Run(); err3 != nil {
-				fmt.Printf("[BUILDER] FAILED: %v\n", err3)
-				os.Exit(1)
-			}
-			os.Remove(filepath.Join(tmpDataDir, "day2.json"))
-		}
+		cmd2.Run()
+		os.RemoveAll(tmpDataDir)
 	}
 
-	pubData := filepath.Join(publishDir, "wwwroot", "data")
-	if _, err := os.Stat(pubData); os.IsNotExist(err) {
-		os.MkdirAll(pubData, 0755)
-		copyDir(sourceData, pubData)
-	}
-
-	fmt.Println("[BUILDER] 2/3 kopiowanie wwwroot...")
 	wwwrootSrc := filepath.Join(publishDir, "wwwroot")
-	wwwrootDst := filepath.Join(filepath.Dir(*outPath), "wwwroot")
-	os.RemoveAll(wwwrootDst)
-	copyDir(wwwrootSrc, wwwrootDst)
+	embedRoot := filepath.Join(os.TempDir(), "kimono_embed")
+	os.RemoveAll(embedRoot)
+	os.MkdirAll(embedRoot, 0755)
+	embedWwwroot := filepath.Join(embedRoot, "wwwroot")
+	copyDir(wwwrootSrc, embedWwwroot)
 
-	finalData := filepath.Join(wwwrootDst, "data")
-	os.MkdirAll(finalData, 0755)
-	// wyczysc co publish mogl skopiowac z engine (day2.json)
-	os.RemoveAll(finalData)
-	os.MkdirAll(finalData, 0755)
-	copyDir(sourceData, finalData)
+	finalDataDst := filepath.Join(embedWwwroot, "data")
+	os.RemoveAll(finalDataDst)
+	os.MkdirAll(finalDataDst, 0755)
+	copyDir(sourceData, finalDataDst)
 
-	// project.janproj fix
-	possibleJanproj := []string{
-		filepath.Join(*gamePath, "project.janproj"),
-		filepath.Join(*gamePath, "Data", "project.janproj"),
-		filepath.Join(sourceData, "project.janproj"),
-	}
-	for _, src := range possibleJanproj {
+	for _, src := range []string{filepath.Join(*gamePath, "project.janproj"), filepath.Join(*gamePath, "Data", "project.janproj"), filepath.Join(sourceData, "project.janproj")} {
 		if _, err := os.Stat(src); err == nil {
-			copyFile(src, filepath.Join(wwwrootDst, "project.janproj"))
-			copyFile(src, filepath.Join(finalData, "project.janproj"))
-			fmt.Printf("  - project.janproj z %s\n", src)
+			copyFile(src, filepath.Join(embedWwwroot, "project.janproj"))
+			copyFile(src, filepath.Join(finalDataDst, "project.janproj"))
 			break
 		}
 	}
-
-	// images fix
-	possibleImages := []string{
-		filepath.Join(*gamePath, "images"),
-		filepath.Join(*gamePath, "Images"),
-		filepath.Join(*gamePath, "Data", "images"),
-		filepath.Join(sourceData, "images"),
-	}
-	for _, src := range possibleImages {
+	for _, src := range []string{filepath.Join(*gamePath, "images"), filepath.Join(*gamePath, "Data", "images"), filepath.Join(sourceData, "images")} {
 		if st, err := os.Stat(src); err == nil && st.IsDir() {
-			copyDir(src, filepath.Join(wwwrootDst, "images"))
-			copyDir(src, filepath.Join(wwwrootDst, "Images"))
-			fmt.Printf("  - images z %s\n", src)
+			copyDir(src, filepath.Join(embedWwwroot, "images"))
 			break
 		}
 	}
@@ -180,38 +134,59 @@ func main() {
 		ext := strings.ToLower(filepath.Ext(p))
 		if ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".webp" {
 			rel, _ := filepath.Rel(sourceData, p)
-			copyFile(p, filepath.Join(wwwrootDst, "images", rel))
+			if !strings.Contains(strings.ToLower(rel), "images") {
+				copyFile(p, filepath.Join(embedWwwroot, "images", filepath.Base(p)))
+			}
 		}
 		return nil
 	})
 
-	fmt.Println("[BUILDER] Finalny wwwroot/data:")
-	filepath.Walk(finalData, func(p string, info os.FileInfo, e error) error {
-		if !info.IsDir() {
-			rel, _ := filepath.Rel(finalData, p)
-			fmt.Printf("  - %s\n", rel)
-		}
-		return nil
-	})
+	fmt.Println("[BUILDER] 3/3 budowanie exe bez konsoli (windowsgui)...")
+	launcherCode := `package main
 
-	fmt.Println("[BUILDER] 3/3 budowanie launchera EXE...")
-	launcherCode := `
-package main
 import (
+	"embed"
 	"fmt"
+	"io"
+	"io/fs"
 	"log"
+	"mime"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
+	"strings"
+	"time"
 )
+
+//go:embed all:wwwroot
+var embeddedFS embed.FS
+
 func openBrowser(url string) {
 	var cmd string
 	var args []string
 	switch runtime.GOOS {
 	case "windows":
+		chromePaths := []string{
+			os.Getenv("PROGRAMFILES") + "\\Google\\Chrome\\Application\\chrome.exe",
+			os.Getenv("PROGRAMFILES(X86)") + "\\Google\\Chrome\\Application\\chrome.exe",
+			os.Getenv("LOCALAPPDATA") + "\\Google\\Chrome\\Application\\chrome.exe",
+			os.Getenv("PROGRAMFILES") + "\\Microsoft\\Edge\\Application\\msedge.exe",
+		}
+		found := ""
+		for _, p := range chromePaths {
+			if _, err := os.Stat(p); err == nil {
+				found = p
+				break
+			}
+		}
+		if found != "" {
+			cmd = found
+			args = []string{fmt.Sprintf("--app=%s", url), "--new-window", "--window-size=1280,800"}
+			exec.Command(cmd, args...).Start()
+			return
+		}
 		cmd = "cmd"
 		args = []string{"/c", "start", url}
 	case "darwin":
@@ -223,35 +198,81 @@ func openBrowser(url string) {
 	}
 	exec.Command(cmd, args...).Start()
 }
+
 func main() {
-	exePath, _ := os.Executable()
-	exeDir := filepath.Dir(exePath)
-	wwwroot := filepath.Join(exeDir, "wwwroot")
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		log.Fatal(err)
-	}
+	wwwrootFS, _ := fs.Sub(embeddedFS, "wwwroot")
+	mime.AddExtensionType(".js", "application/javascript")
+	mime.AddExtensionType(".wasm", "application/wasm")
+	mime.AddExtensionType(".dll", "application/octet-stream")
+	mime.AddExtensionType(".json", "application/json")
+
+	listener, _ := net.Listen("tcp", "127.0.0.1:0")
 	port := listener.Addr().(*net.TCPAddr).Port
 	listener.Close()
-	fmt.Printf("KimonoGM - serwuje %s na http://localhost:%d\n", wwwroot, port)
-	fs := http.FileServer(http.Dir(wwwroot))
-	http.Handle("/", fs)
+
+	http.HandleFunc("/__quit", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("bye"))
+		go func() { time.Sleep(300 * time.Millisecond); os.Exit(0) }()
+	})
+
+	fsrv := http.FileServer(http.FS(wwwrootFS))
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/__quit") {
+			return
+		}
+		if r.URL.Path == "/" || r.URL.Path == "/index.html" || strings.HasSuffix(r.URL.Path, ".html") {
+			path := strings.TrimPrefix(r.URL.Path, "/")
+			if path == "" {
+				path = "index.html"
+			}
+			if data, err := fs.ReadFile(wwwrootFS, path); err == nil {
+				inject := "<script>(function(){function q(){try{navigator.sendBeacon('/__quit')}catch(e){fetch('/__quit',{method:'POST',keepalive:true})}} window.addEventListener('beforeunload',q); window.addEventListener('pagehide',q);})();</script>"
+				html := string(data)
+				if strings.Contains(html, "</body>") {
+					html = strings.Replace(html, "</body>", inject+"</body>", 1)
+				} else {
+					html += inject
+				}
+				w.Header().Set("Content-Type", "text/html")
+				io.WriteString(w, html)
+				return
+			}
+		}
+		if strings.HasSuffix(r.URL.Path, ".js") {
+			w.Header().Set("Content-Type", "application/javascript")
+		} else if strings.HasSuffix(r.URL.Path, ".wasm") {
+			w.Header().Set("Content-Type", "application/wasm")
+		}
+		fsrv.ServeHTTP(w, r)
+	})
+
 	url := fmt.Sprintf("http://localhost:%d", port)
 	go openBrowser(url)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil))
 }
 `
-	launcherPath := filepath.Join(os.TempDir(), "kimono_launcher.go")
+	launcherPath := filepath.Join(embedRoot, "launcher.go")
 	os.WriteFile(launcherPath, []byte(launcherCode), 0644)
+
 	os.MkdirAll(filepath.Dir(*outPath), 0755)
-	buildCmd := exec.Command("go", "build", "-o", *outPath, launcherPath)
+	
+	var buildCmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		buildCmd = exec.Command("go", "build", "-ldflags", "-H=windowsgui", "-o", *outPath, launcherPath)
+	} else {
+		buildCmd = exec.Command("go", "build", "-o", *outPath, launcherPath)
+	}
+	buildCmd.Dir = embedRoot
 	buildCmd.Stdout = os.Stdout
 	buildCmd.Stderr = os.Stderr
 	if err := buildCmd.Run(); err != nil {
-		fmt.Printf("[BUILDER] Launcher fail: %v\n", err)
-	} else {
-		fmt.Printf("[BUILDER] GOTOWE: %s\n", *outPath)
+		fmt.Printf("[BUILDER] FAILED: %v\n", err)
+		os.Exit(1)
 	}
-	// final cleanup
+
 	os.RemoveAll(filepath.Join(engineRoot, "wwwroot", "data"))
+	fmt.Printf("[BUILDER] GOTOWE (bez konsoli): %s\n", *outPath)
+	if st, err := os.Stat(*outPath); err == nil {
+		fmt.Printf("Rozmiar: %.1f MB - single file, no cmd window, no collision\n", float64(st.Size())/1024/1024)
+	}
 }
