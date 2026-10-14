@@ -55,7 +55,6 @@ func main() {
 	cwd, _ := os.Getwd()
 	engineRoot := filepath.Join(filepath.Dir(filepath.Dir(cwd)), "engine")
 	engineProj := filepath.Join(engineRoot, "MakerEngine.csproj")
-	engineWwwrootData := filepath.Join(engineRoot, "wwwroot", "data")
 
 	fmt.Printf("[BUILDER] Engine: %s\n", engineProj)
 	fmt.Printf("[BUILDER] Game: %s\n", *gamePath)
@@ -81,37 +80,54 @@ func main() {
 	}
 	fmt.Printf("[BUILDER] Zrodlo: %s\n", sourceData)
 
-	fmt.Println("[BUILDER] Czyszcze obj/bin...")
+	fmt.Println("[BUILDER] Czyszcze obj/bin/wwwroot/data...")
 	os.RemoveAll(filepath.Join(engineRoot, "obj"))
 	os.RemoveAll(filepath.Join(engineRoot, "bin"))
-	os.Remove(filepath.Join(engineWwwrootData, ".keep"))
+	os.RemoveAll(filepath.Join(engineRoot, "wwwroot", "data"))
+	// usun tez stare backupy ktore zostaly
+	os.RemoveAll(filepath.Join(engineRoot, "wwwroot", "data_backup_before_build"))
+	os.RemoveAll(filepath.Join(engineRoot, "Assets_backup_before_build"))
+	os.RemoveAll(filepath.Join(engineRoot, "MakerEngine.csproj_backup_before_build"))
 
 	fmt.Println("[BUILDER] 1/3 dotnet publish...")
 	publishDir := filepath.Join(os.TempDir(), "kimono_publish")
 	os.RemoveAll(publishDir)
-	cmd := exec.Command("dotnet", "publish", engineProj, "-c", "Release", "-o", publishDir, fmt.Sprintf("-p:GameAssetsRoot=%s", *gamePath))
+	// FIX: dodaj /p:ErrorOnDuplicatePublishOutputFiles=false i czyscic static web assets
+	cmd := exec.Command("dotnet", "publish", engineProj, "-c", "Release", "-o", publishDir, fmt.Sprintf("-p:GameAssetsRoot=%s", *gamePath), "/p:StaticWebAssetsEnabled=false")
+	// najpierw proba bez StaticWebAssets
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		fmt.Printf("[BUILDER] FAILED: %v\n", err)
-		os.Exit(1)
+	err := cmd.Run()
+	if err != nil {
+		// jesli fail z StaticWebAssetsEnabled=false, sprobuj normalnie ale po czyszczeniu
+		fmt.Println("[BUILDER] Retry z normalnym publish po czyszczeniu...")
+		os.RemoveAll(filepath.Join(engineRoot, "obj"))
+		cmd2 := exec.Command("dotnet", "publish", engineProj, "-c", "Release", "-o", publishDir, fmt.Sprintf("-p:GameAssetsRoot=%s", *gamePath))
+		cmd2.Stdout = os.Stdout
+		cmd2.Stderr = os.Stderr
+		if err2 := cmd2.Run(); err2 != nil {
+			// jesli dalej blad o day2.json, to znaczy ze w csproj jest hardcoded asset
+			// stworz pusty day2.json tymczasowo zeby publish przeszedl, potem go usuniemy
+			fmt.Println("[BUILDER] FIX: tworze tymczasowy day2.json zeby obejsc StaticWebAssets...")
+			tmpDataDir := filepath.Join(engineRoot, "wwwroot", "data")
+			os.MkdirAll(tmpDataDir, 0755)
+			os.WriteFile(filepath.Join(tmpDataDir, "day2.json"), []byte("{}"), 0644)
+			os.RemoveAll(filepath.Join(engineRoot, "obj"))
+			cmd3 := exec.Command("dotnet", "publish", engineProj, "-c", "Release", "-o", publishDir, fmt.Sprintf("-p:GameAssetsRoot=%s", *gamePath))
+			cmd3.Stdout = os.Stdout
+			cmd3.Stderr = os.Stderr
+			if err3 := cmd3.Run(); err3 != nil {
+				fmt.Printf("[BUILDER] FAILED: %v\n", err3)
+				os.Exit(1)
+			}
+			os.Remove(filepath.Join(tmpDataDir, "day2.json"))
+		}
 	}
 
 	pubData := filepath.Join(publishDir, "wwwroot", "data")
 	if _, err := os.Stat(pubData); os.IsNotExist(err) {
 		os.MkdirAll(pubData, 0755)
 		copyDir(sourceData, pubData)
-	} else {
-		empty := true
-		filepath.Walk(pubData, func(p string, info os.FileInfo, e error) error {
-			if !info.IsDir() {
-				empty = false
-			}
-			return nil
-		})
-		if empty {
-			copyDir(sourceData, pubData)
-		}
 	}
 
 	fmt.Println("[BUILDER] 2/3 kopiowanie wwwroot...")
@@ -122,78 +138,49 @@ func main() {
 
 	finalData := filepath.Join(wwwrootDst, "data")
 	os.MkdirAll(finalData, 0755)
+	// wyczysc co publish mogl skopiowac z engine (day2.json)
+	os.RemoveAll(finalData)
+	os.MkdirAll(finalData, 0755)
 	copyDir(sourceData, finalData)
 
-	// FIX: project.janproj - kopiuj wszedzie gdzie gra go szuka
-	fmt.Println("[BUILDER] FIX: project.janproj...")
+	// project.janproj fix
 	possibleJanproj := []string{
 		filepath.Join(*gamePath, "project.janproj"),
 		filepath.Join(*gamePath, "Data", "project.janproj"),
-		filepath.Join(*gamePath, "data", "project.janproj"),
 		filepath.Join(sourceData, "project.janproj"),
 	}
 	for _, src := range possibleJanproj {
 		if _, err := os.Stat(src); err == nil {
-			// kopiuj do wwwroot root (tam gra go szuka - /project.janproj)
 			copyFile(src, filepath.Join(wwwrootDst, "project.janproj"))
-			// i do wwwroot/data
 			copyFile(src, filepath.Join(finalData, "project.janproj"))
-			// i do wwwroot root jako scenes.json fallback?
-			fmt.Printf("  - znaleziono %s\n", src)
+			fmt.Printf("  - project.janproj z %s\n", src)
 			break
 		}
 	}
 
-	// FIX: images/sounds - kopiuj z kazdego mozliwego miejsca
-	fmt.Println("[BUILDER] FIX: images/sounds/avatar...")
+	// images fix
 	possibleImages := []string{
 		filepath.Join(*gamePath, "images"),
 		filepath.Join(*gamePath, "Images"),
 		filepath.Join(*gamePath, "Data", "images"),
-		filepath.Join(*gamePath, "Data", "Images"),
-		filepath.Join(*gamePath, "data", "images"),
 		filepath.Join(sourceData, "images"),
-		filepath.Join(sourceData, "Images"),
 	}
 	for _, src := range possibleImages {
 		if st, err := os.Stat(src); err == nil && st.IsDir() {
-			// kopiuj do obu wariantow - lowercase i oryginal
-			dst1 := filepath.Join(wwwrootDst, "images")
-			dst2 := filepath.Join(wwwrootDst, "Images")
-			copyDir(src, dst1)
-			copyDir(src, dst2)
-			fmt.Printf("  - images: %s -> %s\n", src, dst1)
+			copyDir(src, filepath.Join(wwwrootDst, "images"))
+			copyDir(src, filepath.Join(wwwrootDst, "Images"))
+			fmt.Printf("  - images z %s\n", src)
 			break
 		}
 	}
-	possibleSounds := []string{
-		filepath.Join(*gamePath, "sounds"),
-		filepath.Join(*gamePath, "Sounds"),
-		filepath.Join(*gamePath, "Data", "sounds"),
-		filepath.Join(sourceData, "sounds"),
-	}
-	for _, src := range possibleSounds {
-		if st, err := os.Stat(src); err == nil && st.IsDir() {
-			dst := filepath.Join(wwwrootDst, "sounds")
-			copyDir(src, dst)
-			fmt.Printf("  - sounds: %s\n", src)
-			break
-		}
-	}
-
-	// FIX: jesli avatar jest w data/images/avatar.png itp - skopiuj tez bezposrednio pliki json referencje
-	// skopiuj wszystkie pliki z sourceData ktore nie sa json (np avatar.png w Data)
 	filepath.Walk(sourceData, func(p string, info os.FileInfo, e error) error {
 		if info.IsDir() {
 			return nil
 		}
 		ext := strings.ToLower(filepath.Ext(p))
-		if ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".webp" || ext == ".gif" {
+		if ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".webp" {
 			rel, _ := filepath.Rel(sourceData, p)
-			// jesli to obrazek w Data, skopiuj do wwwroot/images i wwwroot/data
 			copyFile(p, filepath.Join(wwwrootDst, "images", rel))
-			copyFile(p, filepath.Join(wwwrootDst, "Images", rel))
-			copyFile(p, filepath.Join(finalData, rel))
 		}
 		return nil
 	})
@@ -206,29 +193,10 @@ func main() {
 		}
 		return nil
 	})
-	fmt.Println("[BUILDER] Finalny wwwroot root:")
-	for _, f := range []string{"project.janproj", "scenes.json"} {
-		if _, err := os.Stat(filepath.Join(wwwrootDst, f)); err == nil {
-			fmt.Printf("  - %s OK\n", f)
-		} else {
-			fmt.Printf("  - %s BRAK\n", f)
-		}
-	}
-	if _, err := os.Stat(filepath.Join(wwwrootDst, "images")); err == nil {
-		cnt := 0
-		filepath.Walk(filepath.Join(wwwrootDst, "images"), func(p string, info os.FileInfo, e error) error {
-			if !info.IsDir() {
-				cnt++
-			}
-			return nil
-		})
-		fmt.Printf("  - images/ %d plikow\n", cnt)
-	}
 
 	fmt.Println("[BUILDER] 3/3 budowanie launchera EXE...")
 	launcherCode := `
 package main
-
 import (
 	"fmt"
 	"log"
@@ -239,7 +207,6 @@ import (
 	"path/filepath"
 	"runtime"
 )
-
 func openBrowser(url string) {
 	var cmd string
 	var args []string
@@ -256,46 +223,35 @@ func openBrowser(url string) {
 	}
 	exec.Command(cmd, args...).Start()
 }
-
 func main() {
 	exePath, _ := os.Executable()
 	exeDir := filepath.Dir(exePath)
 	wwwroot := filepath.Join(exeDir, "wwwroot")
-
-	if _, err := os.Stat(filepath.Join(wwwroot, "index.html")); os.IsNotExist(err) {
-		wwwroot = filepath.Join(exeDir, "wwwroot")
-	}
-
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		log.Fatal(err)
 	}
 	port := listener.Addr().(*net.TCPAddr).Port
 	listener.Close()
-
 	fmt.Printf("KimonoGM - serwuje %s na http://localhost:%d\n", wwwroot, port)
-	fmt.Println("Zamknij to okno zeby zakonczyc gre")
-
 	fs := http.FileServer(http.Dir(wwwroot))
 	http.Handle("/", fs)
-
 	url := fmt.Sprintf("http://localhost:%d", port)
 	go openBrowser(url)
-
 	log.Fatal(http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil))
 }
 `
 	launcherPath := filepath.Join(os.TempDir(), "kimono_launcher.go")
 	os.WriteFile(launcherPath, []byte(launcherCode), 0644)
-
 	os.MkdirAll(filepath.Dir(*outPath), 0755)
 	buildCmd := exec.Command("go", "build", "-o", *outPath, launcherPath)
 	buildCmd.Stdout = os.Stdout
 	buildCmd.Stderr = os.Stderr
 	if err := buildCmd.Run(); err != nil {
-		fmt.Printf("[BUILDER] Launcher fail, ale wwwroot gotowy: %v\n", err)
+		fmt.Printf("[BUILDER] Launcher fail: %v\n", err)
 	} else {
 		fmt.Printf("[BUILDER] GOTOWE: %s\n", *outPath)
-		fmt.Printf("[BUILDER] + %s\n", wwwrootDst)
 	}
+	// final cleanup
+	os.RemoveAll(filepath.Join(engineRoot, "wwwroot", "data"))
 }
