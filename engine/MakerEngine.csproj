@@ -3,13 +3,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <DefaultItemExcludes>$(DefaultItemExcludes);Tools\**;bin\**;obj\**</DefaultItemExcludes>
-    <!-- FIX: usuniete BaseIntermediateOutputPath = obj\Janusz\ ktore robilo MSB3539 i rozwalalo wwwroot -->
-    
-    <!-- PARAMETR: skąd brać assety. Default = Assets (prod) -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);Tools\**;bin\**;obj\**;wwwroot\**\.keep;wwwroot\**\.gitkeep</DefaultItemExcludes>
     <GameAssetsRoot Condition="'$(GameAssetsRoot)' == ''">Assets</GameAssetsRoot>
-
-    <!-- FIX: localhost:5020 - wylaczamy trimming ktory cial Ci MakerEngine.wasm do 107kB i biala strona -->
     <PublishTrimmed>false</PublishTrimmed>
     <BlazorWebAssemblyEnableTrimming>false</BlazorWebAssemblyEnableTrimming>
     <PublishTrimmed Condition="'$(Configuration)'=='Release'">false</PublishTrimmed>
@@ -32,14 +27,29 @@
     <DataFiles Include="$(GameAssetsRoot)\*.json" />
   </ItemGroup>
 
-  <!-- FIX: czyszczenie bez wywalania StaticWebAssets -->
+  <!-- FIX: .keep nie jest assetem - ignoruj -->
+  <ItemGroup>
+    <Content Remove="wwwroot\**\.keep" />
+    <Content Remove="wwwroot\**\.gitkeep" />
+    <None Remove="wwwroot\**\.keep" />
+    <None Remove="wwwroot\**\.gitkeep" />
+    <StaticWebAsset Remove="wwwroot\**\.keep" />
+    <StaticWebAsset Remove="wwwroot\**\.gitkeep" />
+  </ItemGroup>
+
+  <!-- FIX: **\* zamiast **\*.* zeby skasowac tez .keep -->
   <Target Name="JanuszClean" BeforeTargets="PrepareForBuild;ResolveStaticWebAssetsInputs;BeforeBuild">
     <ItemGroup>
-      <OldDataFiles Include="wwwroot\data\**\*.*" />
-      <OldSoundFiles Include="wwwroot\sounds\**\*.*" />
+      <OldDataFiles Include="wwwroot\data\**\*" />
+      <OldImages Include="wwwroot\images\**\*" />
+      <OldImages2 Include="wwwroot\Images\**\*" />
+      <OldSounds Include="wwwroot\sounds\**\*" />
     </ItemGroup>
-    <Delete Files="@(OldDataFiles);@(OldSoundFiles)" Condition="Exists('wwwroot\data')" />
-    <Delete Files="@(OldDataFiles);@(OldSoundFiles)" Condition="Exists('wwwroot\sounds')" />
+    <Delete Files="@(OldDataFiles)" Condition="Exists('wwwroot\data')" />
+    <Delete Files="@(OldImages)" Condition="Exists('wwwroot\images')" />
+    <Delete Files="@(OldImages2)" Condition="Exists('wwwroot\Images')" />
+    <Delete Files="@(OldSounds)" Condition="Exists('wwwroot\sounds')" />
+    <Delete Files="wwwroot\data\.keep;wwwroot\data\.gitkeep;wwwroot\images\.keep;wwwroot\sounds\.keep" />
   </Target>
 
   <Target Name="CopyGameAssets" BeforeTargets="PrepareForBuild;BeforeBuild" DependsOnTargets="JanuszClean">
@@ -54,9 +64,7 @@
     <Message Text="COPIED FROM $(GameAssetsRoot) -> wwwroot: @(DataFiles)" Importance="high" />
   </Target>
 
-  <!-- FIX: jesli nie ma assetow, stworz placeholder zeby StaticWebAssets nie rzucal No file exists -->
   <Target Name="EnsureDataPlaceholder" AfterTargets="CopyGameAssets" BeforeTargets="ResolveStaticWebAssetsInputs">
     <MakeDir Directories="wwwroot\data" />
-    <WriteLinesToFile File="wwwroot\data\.keep" Lines="keep" Overwrite="false" Condition="!Exists('wwwroot\data\project.janproj') AND !Exists('wwwroot\data\day1.json')" />
   </Target>
 </Project>
