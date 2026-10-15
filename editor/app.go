@@ -185,6 +185,104 @@ func (a *App) RunGame(projectPath string) error {
         return nil
 }
 
+func (a *App) BuildStandaloneExe(projectPath string) (string, error) {
+	if projectPath == "" {
+		projectPath = a.projectPath
+	}
+	if projectPath == "" {
+		return "", fmt.Errorf("brak sciezki projektu")
+	}
+
+	// Nazwa exe z folderu gry
+	projectName := filepath.Base(projectPath)
+	safeName := strings.ReplaceAll(projectName, " ", "_")
+	
+	// Pobrane - tam ma wylądować exe
+	downloads := ""
+	if home, err := os.UserHomeDir(); err == nil {
+		downloads = filepath.Join(home, "Downloads")
+	} else {
+		downloads = os.TempDir()
+	}
+	_ = os.MkdirAll(downloads, 0755)
+	outExe := filepath.Join(downloads, safeName+".exe")
+
+	// Znajdź builder - tools/builder/main.go
+	builderDir := ""
+	candidates := []string{
+		filepath.Join("..", "tools", "builder"),
+		filepath.Join("..", "..", "tools", "builder"),
+		filepath.Join("tools", "builder"),
+		`C:\Users\MD-Core\KimonoGM\tools\builder`,
+	}
+	for _, c := range candidates {
+		abs, _ := filepath.Abs(c)
+		if _, err := os.Stat(abs); err == nil {
+			builderDir = abs
+			break
+		}
+	}
+	if builderDir == "" {
+		return "", fmt.Errorf("nie znaleziono tools/builder - stwórz folder tools/builder z main.go")
+	}
+
+	fmt.Printf("[EDITOR] Budowanie %s -> %s via %s\n", projectPath, outExe, builderDir)
+
+	// go run . --game X --out Y
+	cmd := exec.Command("go", "run", ".", "--game", projectPath, "--out", outExe)
+	cmd.Dir = builderDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	// Pokaż logi w edytorze przez runtime.Log
+	if a.ctx != nil {
+		runtime.LogInfo(a.ctx, fmt.Sprintf("[BUILD] Start: %s -> %s", projectName, outExe))
+	}
+
+	if err := cmd.Run(); err != nil {
+		if a.ctx != nil {
+			runtime.LogError(a.ctx, fmt.Sprintf("[BUILD] FAILED: %v", err))
+		}
+		return "", err
+	}
+
+	if a.ctx != nil {
+		runtime.LogInfo(a.ctx, fmt.Sprintf("[BUILD] GOTOWE: %s", outExe))
+	}
+
+	return outExe, nil
+}
+
+// Wersja uproszczona - jeśli nie chcesz budować player-template, tylko sam publish + zip
+func (a *App) BuildGameToDownloads(projectPath string) (string, error) {
+	if projectPath == "" {
+		projectPath = a.projectPath
+	}
+	projectName := filepath.Base(projectPath)
+	
+	downloads := ""
+	if home, err := os.UserHomeDir(); err == nil {
+		downloads = filepath.Join(home, "Downloads")
+	}
+	outDir := filepath.Join(downloads, projectName+"_web")
+	
+	// Re-use istniejącego BuildGame ale z output do Pobranych
+	enginePath, _ := filepath.Abs(filepath.Join("..", "engine", "MakerEngine.csproj"))
+	if _, err := os.Stat(enginePath); err != nil {
+		enginePath, _ = filepath.Abs(filepath.Join("..", "..", "engine", "MakerEngine.csproj"))
+	}
+	
+	os.MkdirAll(outDir, 0755)
+	cmd := exec.Command("dotnet", "publish", enginePath, fmt.Sprintf("-p:GameAssetsRoot=%s", projectPath), "-c", "Release", "-o", outDir)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+	return outDir, nil
+}
+
+
 func (a *App) BuildGame(projectPath string) error {
 	enginePath, _ := filepath.Abs(filepath.Join("..", "engine", "MakerEngine.csproj"))
 	if _, err := os.Stat(enginePath); err != nil {
