@@ -360,5 +360,5 @@ log.Fatal(http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d",port),nil))
 	if st, err := os.Stat(finalOut); err == nil {
 		fmt.Printf("Rozmiar: %.1f MB - FINAL STABLE - NO ADMIN NO GCC NO WEBVIEW\n", float64(st.Size())/1024/1024)
 	}
-	fmt.Println("Userzy uruchomią bez admina, bez Chrome install, bez WebView2 Runtime - wystarczy Edge (jest na każdym Win10/11)")
+	fmt.Println("Userzy uruchomiÄ bez admina, bez Chrome install, bez WebView2 Runtime - wystarczy Edge (jest na kaĹźdym Win10/11)")
 }
