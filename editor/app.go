@@ -5,12 +5,12 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"io"
 	"time"
 	goruntime "runtime"
 
@@ -144,45 +144,45 @@ func (a *App) recentFilePath() string {
 	return filepath.Join(os.TempDir(), "kimonogm_recent.json")
 }
 func (a *App) RunGame(projectPath string) error {
-        // zabij poprzednie instancje na 5020
-        exec.Command("taskkill", "/F", "/IM", "MakerEngine.exe").Run()
-        exec.Command("cmd", "/C", "for /f \"tokens=5\" %a in ('netstat -aon ^| findstr :5020') do taskkill /F /PID %a").Run()
+	// zabij poprzednie instancje na 5020
+	exec.Command("taskkill", "/F", "/IM", "MakerEngine.exe").Run()
+	exec.Command("cmd", "/C", "for /f \"tokens=5\" %a in ('netstat -aon ^| findstr :5020') do taskkill /F /PID %a").Run()
 
-        enginePath, _ := filepath.Abs(filepath.Join("..", "engine", "MakerEngine.csproj"))
-        if _, err := os.Stat(enginePath); err != nil {
-                enginePath, _ = filepath.Abs(filepath.Join("..", "..", "engine", "MakerEngine.csproj"))
-        }
-        if _, err := os.Stat(enginePath); err != nil {
-                return fmt.Errorf("nie znaleziono %s: %v", enginePath, err)
-        }
+	enginePath, _ := filepath.Abs(filepath.Join("..", "engine", "MakerEngine.csproj"))
+	if _, err := os.Stat(enginePath); err != nil {
+		enginePath, _ = filepath.Abs(filepath.Join("..", "..", "engine", "MakerEngine.csproj"))
+	}
+	if _, err := os.Stat(enginePath); err != nil {
+		return fmt.Errorf("nie znaleziono %s: %v", enginePath, err)
+	}
 
-        // forward slashes + cudzysłów dla ścieżek z spacją
-        gp := filepath.ToSlash(projectPath)
-        prop := fmt.Sprintf("-p:GameAssetsRoot=\"%s\"", gp)
+	// forward slashes + cudzysłów dla ścieżek z spacją
+	gp := filepath.ToSlash(projectPath)
+	prop := fmt.Sprintf("-p:GameAssetsRoot=\"%s\"", gp)
 
-        // to samo co Ci działa z konsoli + wyłączony trimming
-        cmd := exec.Command("dotnet", "run", "--project", enginePath, prop, "-p:PublishTrimmed=false", "-p:BlazorWebAssemblyEnableTrimming=false", "--urls", "http://localhost:5020", "--no-launch-profile")
-        cmd.Dir = filepath.Dir(enginePath)
-        // log do pliku żebyś widział w edytorze co się wywala
-        logFile, _ := os.Create(filepath.Join(os.TempDir(), "kimonogm_run.log"))
-        if logFile != nil {
-                cmd.Stdout = io.MultiWriter(os.Stdout, logFile)
-                cmd.Stderr = io.MultiWriter(os.Stderr, logFile)
-        } else {
-                cmd.Stdout = os.Stdout
-                cmd.Stderr = os.Stderr
-        }
-        err := cmd.Start()
-        if err != nil {
-                return err
-        }
-        // daj dotnetowi 2s na wstanie
-        go func() {
-                time.Sleep(2 * time.Second)
-                // nie blokuj
-                cmd.Process.Release()
-        }()
-        return nil
+	// to samo co Ci działa z konsoli + wyłączony trimming
+	cmd := exec.Command("dotnet", "run", "--project", enginePath, prop, "-p:PublishTrimmed=false", "-p:BlazorWebAssemblyEnableTrimming=false", "--urls", "http://localhost:5020", "--no-launch-profile")
+	cmd.Dir = filepath.Dir(enginePath)
+	// log do pliku żebyś widział w edytorze co się wywala
+	logFile, _ := os.Create(filepath.Join(os.TempDir(), "kimonogm_run.log"))
+	if logFile != nil {
+		cmd.Stdout = io.MultiWriter(os.Stdout, logFile)
+		cmd.Stderr = io.MultiWriter(os.Stderr, logFile)
+	} else {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
+	err := cmd.Start()
+	if err != nil {
+		return err
+	}
+	// daj dotnetowi 2s na wstanie
+	go func() {
+		time.Sleep(2 * time.Second)
+		// nie blokuj
+		cmd.Process.Release()
+	}()
+	return nil
 }
 
 func (a *App) BuildStandaloneExe(projectPath string) (string, error) {
@@ -207,34 +207,32 @@ func (a *App) BuildStandaloneExe(projectPath string) (string, error) {
 	_ = os.MkdirAll(downloads, 0755)
 	outExe := filepath.Join(downloads, safeName+".exe")
 
-	// Znajdź builder - tools/builder/main.go
-	builderDir := ""
-	candidates := []string{
-		filepath.Join("..", "tools", "builder"),
-		filepath.Join("..", "..", "tools", "builder"),
-		filepath.Join("tools", "builder"),
-		`C:\Users\MD-Core\KimonoGM\tools\builder`,
-	}
-	for _, c := range candidates {
-		abs, _ := filepath.Abs(c)
-		if _, err := os.Stat(abs); err == nil {
-			builderDir = abs
-			break
+	// Znajdź builder - tools/BuilderEXE
+	builderDir := `C:\Users\MD-Core\KimonoGM\tools\BuilderEXE`
+	if _, err := os.Stat(builderDir); err != nil {
+		// fallback szukanie
+		candidates := []string{
+			filepath.Join("..", "tools", "BuilderEXE"),
+			filepath.Join("..", "..", "tools", "BuilderEXE"),
+			filepath.Join("tools", "BuilderEXE"),
 		}
-	}
-	if builderDir == "" {
-		return "", fmt.Errorf("nie znaleziono tools/builder - stwórz folder tools/builder z main.go")
+		for _, c := range candidates {
+			abs, _ := filepath.Abs(c)
+			if _, err := os.Stat(abs); err == nil {
+				builderDir = abs
+				break
+			}
+		}
 	}
 
 	fmt.Printf("[EDITOR] Budowanie %s -> %s via %s\n", projectPath, outExe, builderDir)
 
-	// go run . --game X --out Y
-	cmd := exec.Command("go", "run", ".", "--game", projectPath, "--out", outExe)
+	// go run Builder-Main.go --game X --out Y
+	cmd := exec.Command("go", "run", "Builder-Main.go", "--game", projectPath, "--out", outExe)
 	cmd.Dir = builderDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	// Pokaż logi w edytorze przez runtime.Log
 	if a.ctx != nil {
 		runtime.LogInfo(a.ctx, fmt.Sprintf("[BUILD] Start: %s -> %s", projectName, outExe))
 	}
@@ -282,6 +280,49 @@ func (a *App) BuildGameToDownloads(projectPath string) (string, error) {
 	return outDir, nil
 }
 
+// === TU JEST NAPRAWA - BuildExeGame v37 ===
+func (a *App) BuildExeGame(projectPath string) (string, error) {
+	logPath := `C:\Users\MD-Core\KimonoGM\build-exe.log`
+	_ = os.WriteFile(logPath, []byte(fmt.Sprintf("START: %s\nTIME: %s\n", projectPath, time.Now().Format(time.RFC3339))), 0644)
+
+	// BEZWZGLĘDNA ŚCIEŻKA DO BUILDERA - nie licz na Getwd
+	builderDir := `C:\Users\MD-Core\KimonoGM\tools\BuilderEXE`
+	builderMain := filepath.Join(builderDir, "Builder-Main.go")
+
+	// TASKKILL v2..v50 + build-server shutdown (v36 fix)
+	if goruntime.GOOS == "windows" {
+		exec.Command("taskkill", "/F", "/IM", "qqppppwww.exe").Run()
+		for i := 2; i <= 50; i++ {
+			exec.Command("taskkill", "/F", "/IM", fmt.Sprintf("qqppppwww_v%d.exe", i)).Run()
+		}
+		exec.Command("dotnet", "build-server", "shutdown").Run()
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	cmd := exec.Command("go", "run", builderMain, "--game", projectPath)
+	cmd.Dir = builderDir
+	out, err := cmd.CombinedOutput()
+
+	// zapisz log
+	_ = os.WriteFile(logPath, append([]byte(fmt.Sprintf("CMD: go run %s --game %s\nDIR: %s\n\n", builderMain, projectPath, builderDir)), out...), 0644)
+	if err != nil {
+		_ = os.WriteFile(logPath, append(out, []byte(fmt.Sprintf("\nEXIT ERR: %v\n", err))...), 0644)
+	}
+
+	// log do wails
+	if a.ctx != nil {
+		runtime.LogInfo(a.ctx, fmt.Sprintf("[BuildExeGame] %s", string(out)))
+		if err != nil {
+			runtime.LogError(a.ctx, fmt.Sprintf("[BuildExeGame] ERR: %v", err))
+		}
+	}
+	fmt.Printf("[BuildExeGame] %s\n", string(out))
+
+	if err != nil {
+		return string(out), fmt.Errorf("build failed: %w\n%s", err, string(out))
+	}
+	return string(out), nil
+}
 
 func (a *App) BuildGame(projectPath string) error {
 	enginePath, _ := filepath.Abs(filepath.Join("..", "engine", "MakerEngine.csproj"))
