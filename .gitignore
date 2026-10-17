@@ -43,3 +43,11 @@ engine/wwwroot/data/
 engine/wwwroot/Images/
 engine/wwwroot/sounds/
 
+# BuilderEXE temp
+[STRIPPED 73 bytes]*.exe
+tools/BuilderEXE/*.syso
+# Build logs
+build-exe.log
+build-web.log
+kimonogm_run.log
+dist/

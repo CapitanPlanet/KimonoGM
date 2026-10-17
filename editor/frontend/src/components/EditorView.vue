@@ -5,7 +5,7 @@ import SceneList from './SceneList.vue'
 import SceneCanvas from './SceneCanvas.vue'
 import ChoicesEditor from './ChoicesEditor.vue'
 import { useProjectStore } from '../stores/projectStore'
-import { OpenProjectFolder, RunGame, BuildGame } from '../../wailsjs/go/main/App'
+import { OpenProjectFolder, RunGame, BuildGame, BuildExeGame } from '../../wailsjs/go/main/App'
 import tutorialBasic from '../assets/tutorial_basic.jpg'
 import JanuszModal from './JanuszModal.vue'
 
@@ -24,6 +24,7 @@ async function saveProject() { try { await store.saveProject(); showSavedToast.v
 async function openFolder() { if (!store.projectPath) return; try { await OpenProjectFolder(store.projectPath) } catch (e) { console.warn(e) } }
 
 const statusMsg = ref('')
+const isBuildingExe = ref(false)
 
 
 async function runParkiet(e: MouseEvent) {
@@ -49,6 +50,24 @@ async function runParkiet(e: MouseEvent) {
     alert('Błąd: '+err.message) 
   } finally { 
     setTimeout(()=>isRunning.value=false, 1000) 
+  }
+}
+
+async function buildExe() {
+  if (!store.projectPath) { alert('Brak ścieżki projektu'); return }
+  try {
+    isBuildingExe.value = true
+    await saveProject()
+    statusMsg.value = '● BUDUJĘ EXE... (taskkill + dotnet publish)'
+    const log = await BuildExeGame(store.projectPath)
+    console.log('BUILD EXE LOG:', log)
+    statusMsg.value = '✓ EXE GOTOWE - Downloads/'
+    setTimeout(()=> statusMsg.value='', 3500)
+  } catch (err: any) {
+    statusMsg.value = '⚠ EXE: ' + err.message
+    alert('Błąd budowania EXE: '+err.message)
+  } finally {
+    setTimeout(()=>isBuildingExe.value=false, 1000)
   }
 }
 </script>
@@ -103,6 +122,11 @@ async function runParkiet(e: MouseEvent) {
         <button @click="showTutorial = true" class="btn-footer tutorial">📖 POKAŻ TUTORIAL</button>
         
         <div class="obi-spacer"></div>
+
+        <button @click="buildExe" :disabled="isBuildingExe" class="btn-footer exe-build" :class="{ running: isBuildingExe }" title="Zbuduj EXE (Downloads/)">
+          <span v-if="!isBuildingExe">💿 EXE</span>
+          <span v-else>● BUDUJĘ...</span>
+        </button>
 
         <button @click="runParkiet" :disabled="isRunning" class="btn-footer parkiet olive" :class="{ running: isRunning }" title="Klik = Odpal grę na :5020 | Shift+Klik = Build">
           <span v-if="!isRunning">▶ WPUŚĆ NA PARKIET</span>
@@ -273,6 +297,12 @@ body { background:var(--bg); margin:0; color:var(--text); overflow-x:hidden; }
 }
 .btn-footer.parkiet:hover { background: #2f3a1f; border-color: #a8b87a; color: #e8ebc0; transform: translateY(-1px); box-shadow: 0 3px 0 #000, 0 6px 16px rgba(0,0,0,0.7); }
 .btn-footer.parkiet.running { background: #000; border-color: #383f26; color: #383f26; animation: blink 0.7s infinite; pointer-events: none; }
+.btn-footer.exe-build {
+  height: 36px; background: #0e1018; border: 1.5px solid #E7C36A; color: #E7C36A;
+  box-shadow: 0 2px 0 #000, 0 4px 12px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.btn-footer.exe-build:hover { background: #1a1c0e; border-color: #FFD700; color: #FFD700; transform: translateY(-1px); box-shadow: 0 3px 0 #000, 0 6px 16px rgba(231,195,106,0.25); }
+.btn-footer.exe-build.running { background: #000; border-color: #444; color: #666; animation: blink 0.7s infinite; pointer-events: none; }
 .obi-maker-tag {
   margin-left: 12px; background:#0a0a0a; border:1.5px solid #222; padding:4px 10px 4px 8px;
   display:flex; align-items:center; transform: rotate(-1.5deg); box-shadow: 0 2px 0 #000, 0 3px 8px rgba(0,0,0,0.6); position:relative;
