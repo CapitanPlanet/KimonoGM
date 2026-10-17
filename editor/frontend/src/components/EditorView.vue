@@ -156,7 +156,7 @@ function closeBuildModal() {
         </button>
 
         <div class="obi-maker-tag">
-          <div class="tag-inner"><span class="kanji">武道</span><span class="maker">KIMONO</span></div>
+          <div class="tag-inner"><span class="kanji">先生、玉舐めて</span><span class="maker">KIMONO</span></div>
         </div>
       </div>
     </div>
@@ -308,10 +308,89 @@ body { background:var(--bg); margin:0; color:var(--text); overflow-x:hidden; }
 .dark .obi-h5 .h-line.mid { height:2px; background: #000; opacity:0.8; }
 .obi-content { position:relative; z-index:10; display:flex; align-items:center; gap:10px; width:100%; }
 .obi-spacer { flex:1; }
-.obi-maker-tag { background: #0a0a0a; border:1.5px solid #000; padding:3px 8px; display:flex; align-items:center; transform: rotate(-1deg); box-shadow: 2px 2px 0 #000; }
-.obi-maker-tag .tag-inner { display:flex; align-items:center; gap:6px; }
-.obi-maker-tag .kanji { font-size:10px; color:#d5cdb8; font-weight:700; }
-.obi-maker-tag .maker { font-size:9px; color:#7a1525; font-family:'JetBrains Mono',monospace; font-weight:700; letter-spacing:0.05em; }
+.obi-maker-tag {
+  position: relative;
+  width: 68px;
+  height: 44px;
+  background: #c19a5b;
+  background-image: 
+    repeating-linear-gradient(90deg, transparent, transparent 1px, rgba(0,0,0,0.05) 1px, rgba(0,0,0,0.05) 2px),
+    radial-gradient(ellipse at 20% 30%, rgba(0,0,0,0.18) 0%, transparent 45%),
+    radial-gradient(ellipse at 80% 20%, rgba(60,30,5,0.20) 0%, transparent 35%),
+    radial-gradient(ellipse at 50% 80%, rgba(0,0,0,0.14) 0%, transparent 50%),
+    radial-gradient(ellipse at 30% 70%, rgba(122,21,37,0.10) 0%, transparent 30%);
+  border: 1.5px solid #0a0706;
+  border-left: 2px solid #1a1512;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(-1.2deg) translateY(1px);
+  box-shadow: 
+    0 0 0 1px #000,
+    1px 2px 0 #000,
+    2px 4px 8px rgba(0,0,0,0.6),
+    inset 0 1px 0 rgba(255,255,255,0.35),
+    inset 0 -2px 0 rgba(0,0,0,0.25);
+  margin-left: 14px;
+  margin-right: 6px;
+  border-radius: 1px;
+  overflow: visible;
+  pointer-events: none;
+  user-select: none;
+  z-index: 5;
+}
+.obi-maker-tag::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 7px;
+  height: 7px;
+  background: #1a1512;
+  border-radius: 50%;
+  border: 1px solid #2a2015;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,1), 0 0 0 1px #000, 0 1px 0 rgba(255,255,255,0.15);
+  z-index: 3;
+}
+.obi-maker-tag::after {
+  content: '';
+  position: absolute;
+  inset: 3px 3px 3px 3px;
+  border: 1px dashed rgba(0,0,0,0.28);
+  pointer-events: none;
+  border-radius: 0px;
+}
+.obi-maker-tag .tag-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  margin-top: 6px;
+  line-height: 1;
+}
+.obi-maker-tag .kanji {
+  font-size: 12px;
+  font-weight: 900;
+  color: #1a0f08;
+  font-family: 'Noto Sans JP', serif;
+  text-shadow: 0 0.5px 0 rgba(255,255,255,0.4);
+  line-height: 1;
+  letter-spacing: 0.04em;
+}
+.obi-maker-tag .maker {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  color: #2a1510;
+  font-weight: 400;
+  line-height: 1;
+  margin-top: 2px;
+  border-top: 1px solid rgba(0,0,0,0.20);
+  padding-top: 2px;
+  text-shadow: 0 0.5px 0 rgba(255,255,255,0.25);
+}
+
 
 .btn-footer { font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; padding:8px 14px; border-radius:4px; border:1.5px solid #000; cursor:pointer; background:#1C1929; color:var(--text); box-shadow: 2px 2px 0 #000; transition: all 0.12s ease; white-space:nowrap; }
 .btn-footer:hover { transform: translate(-1px,-1px); box-shadow: 3px 3px 0 #000; }
