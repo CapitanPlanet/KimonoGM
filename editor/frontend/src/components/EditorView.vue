@@ -45,7 +45,7 @@ async function toggleHost() {
       statusMsg.value = '● PACZKA ZATRZYMANA'
       setTimeout(()=> statusMsg.value='', 2000)
     } catch(e:any) {
-      statusMsg.value = '⚠ ' + e.message
+      statusMsg.value = '⚠ ' + ( (e as any)?.message || String(e) )
     }
     return
   }
@@ -72,8 +72,8 @@ async function toggleHost() {
     }, 3500)
   } catch (err:any) {
     hostBuildStep.value = '⚠ BŁĄD PACZKI'
-    hostBuildLog.value += '\n⚠ BŁĄD: ' + err.message + '\n'
-    statusMsg.value = '⚠ PACZKA: ' + err.message
+    hostBuildLog.value += '\n⚠ BŁĄD: ' + ( (err as any)?.message || String(err) ) + '\n'
+    statusMsg.value = '⚠ PACZKA: ' + ( (err as any)?.message || String(err) )
   }
 }
 
@@ -112,8 +112,10 @@ async function runParkiet(e: MouseEvent) {
       setTimeout(()=> statusMsg.value='', 2500)
     }
   } catch (err: any) { 
-    statusMsg.value = '⚠ ' + err.message
-    alert('Błąd: '+err.message) 
+    const msg = (err as any)?.message || (typeof err === 'string' ? err : JSON.stringify(err)) || 'Nieznany błąd'
+    console.error('[PARKIET] Blad:', err)
+    statusMsg.value = '⚠ ' + msg
+    alert('Błąd: '+msg) 
   } finally { 
     setTimeout(()=>isRunning.value=false, 1000) 
   }
@@ -149,8 +151,8 @@ async function buildExe() {
     
   } catch (err: any) {
     buildStep.value = '⚠ BŁĄD BUDOWANIA'
-    buildLog.value += '\n⚠ BŁĄD: ' + err.message + '\n'
-    statusMsg.value = '⚠ EXE: ' + err.message
+    buildLog.value += '\n⚠ BŁĄD: ' + ((err as any)?.message || String(err)) + '\n'
+    statusMsg.value = '⚠ EXE: ' + ( (err as any)?.message || String(err) )
     // nie zamykaj automatycznie przy błędzie - niech user przeczyta
   } finally {
     // isBuildingExe zamykamy w setTimeout powyżej przy sukcesie, przy błędzie user zamyka X
