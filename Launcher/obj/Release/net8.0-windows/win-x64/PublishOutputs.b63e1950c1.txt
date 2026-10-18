@@ -1,5 +1,0 @@
-C:\Users\MD-Core\AppData\Local\Temp\kimono_launcher_publish\Launcher.pdb
-C:\Users\MD-Core\AppData\Local\Temp\kimono_launcher_publish\Microsoft.Web.WebView2.Core.xml
-C:\Users\MD-Core\AppData\Local\Temp\kimono_launcher_publish\Microsoft.Web.WebView2.Wpf.xml
-C:\Users\MD-Core\AppData\Local\Temp\kimono_launcher_publish\Microsoft.Web.WebView2.WinForms.xml
-C:\Users\MD-Core\AppData\Local\Temp\kimono_launcher_publish\Launcher.exe

@@ -52,3 +52,6 @@ build-web.log
 kimonogm_run.log
 dist/
 [STRIPPED 79 bytes]
+# KimonoGM - build [STRIPPED 181 bytes]
+*.exe
+*.zip
