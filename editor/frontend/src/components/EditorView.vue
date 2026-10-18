@@ -5,7 +5,7 @@ import SceneList from './SceneList.vue'
 import SceneCanvas from './SceneCanvas.vue'
 import ChoicesEditor from './ChoicesEditor.vue'
 import { useProjectStore } from '../stores/projectStore'
-import { OpenProjectFolder, RunGame, BuildGame, BuildExeGame } from '../../wailsjs/go/main/App'
+import { OpenProjectFolder, RunGame, BuildGame, BuildExeGame, HostGame, StopHost, GetHostStatus } from '../../wailsjs/go/main/App'
 import tutorialBasic from '../assets/tutorial_basic.jpg'
 import JanuszModal from './JanuszModal.vue'
 
@@ -28,6 +28,71 @@ const isBuildingExe = ref(false)
 const buildStep = ref('')
 const buildLog = ref('')
 
+const isHosting = ref(false)
+const hostUrl = ref('')
+const isBuildingHost = ref(false)
+
+const hostBuildStep = ref('')
+const hostBuildLog = ref('')
+
+async function toggleHost() {
+  if (!store.projectPath) { alert('Brak ścieżki projektu'); return }
+  if (isHosting.value) {
+    try {
+      await StopHost()
+      isHosting.value = false
+      hostUrl.value = ''
+      statusMsg.value = '● PACZKA ZATRZYMANA'
+      setTimeout(()=> statusMsg.value='', 2000)
+    } catch(e:any) {
+      statusMsg.value = '⚠ ' + ( (e as any)?.message || String(e) )
+    }
+    return
+  }
+  try {
+    isBuildingHost.value = true
+    hostBuildStep.value = '● ZAPISUJĘ PROJEKT...'
+    hostBuildLog.value = ''
+    await saveProject()
+    
+    hostBuildStep.value = '● DOTNET PUBLISH + PACZKA...'
+    hostBuildLog.value += '[1/2] Buduję engine (10-15s)...\n'
+    
+    statusMsg.value = '● BUDUJĘ PACZKĘ...'
+    const zipPath = await HostGame(store.projectPath, 8080)
+    
+    hostBuildLog.value += `[2/2] Gotowe: ${zipPath}\n✓ Paczka w Downloads/\n✓ BEZ LOCALHOSTA - otwieram folder\n`
+    hostBuildStep.value = '✓ PACZKA GOTOWA! (bez localhosta)'
+    hostUrl.value = zipPath
+    statusMsg.value = '✓ PACZKA: ' + zipPath.split('\\').pop()
+
+    setTimeout(()=> {
+      isBuildingHost.value = false
+      statusMsg.value = ''
+    }, 3500)
+  } catch (err:any) {
+    hostBuildStep.value = '⚠ BŁĄD PACZKI'
+    hostBuildLog.value += '\n⚠ BŁĄD: ' + ( (err as any)?.message || String(err) ) + '\n'
+    statusMsg.value = '⚠ PACZKA: ' + ( (err as any)?.message || String(err) )
+  }
+}
+
+function closeHostModal() {
+  if (hostBuildStep.value.includes('BŁĄD') || hostBuildStep.value.includes('GOTOWA') || hostBuildStep.value.includes('GOTOWE') || hostBuildStep.value.includes('GOTOWA!')) {
+    isBuildingHost.value = false
+  }
+}
+
+onMounted(async () => {
+  try {
+    const [running, port, url] = await GetHostStatus()
+    if (running) {
+      isHosting.value = true
+      hostUrl.value = url
+    }
+  } catch {}
+})
+
 async function runParkiet(e: MouseEvent) {
   const isBuild = e.shiftKey
   if (!store.projectPath) { alert('Brak ścieżki projektu'); return }
@@ -47,8 +112,10 @@ async function runParkiet(e: MouseEvent) {
       setTimeout(()=> statusMsg.value='', 2500)
     }
   } catch (err: any) { 
-    statusMsg.value = '⚠ ' + err.message
-    alert('Błąd: '+err.message) 
+    const msg = (err as any)?.message || (typeof err === 'string' ? err : JSON.stringify(err)) || 'Nieznany błąd'
+    console.error('[PARKIET] Blad:', err)
+    statusMsg.value = '⚠ ' + msg
+    alert('Błąd: '+msg) 
   } finally { 
     setTimeout(()=>isRunning.value=false, 1000) 
   }
@@ -84,8 +151,8 @@ async function buildExe() {
     
   } catch (err: any) {
     buildStep.value = '⚠ BŁĄD BUDOWANIA'
-    buildLog.value += '\n⚠ BŁĄD: ' + err.message + '\n'
-    statusMsg.value = '⚠ EXE: ' + err.message
+    buildLog.value += '\n⚠ BŁĄD: ' + ((err as any)?.message || String(err)) + '\n'
+    statusMsg.value = '⚠ EXE: ' + ( (err as any)?.message || String(err) )
     // nie zamykaj automatycznie przy błędzie - niech user przeczyta
   } finally {
     // isBuildingExe zamykamy w setTimeout powyżej przy sukcesie, przy błędzie user zamyka X
@@ -144,6 +211,12 @@ function closeBuildModal() {
         </div>
         <button @click="showTutorial = true" class="btn-footer tutorial">📖 POKAŻ TUTORIAL</button>
         <div class="obi-spacer"></div>
+        
+        <button @click="toggleHost" :disabled="isBuildingHost" class="btn-footer host cyan" :class="{ running: isHosting }" :title="isHosting ? hostUrl : 'Hostuj paczkę na :8080 (to samo co PUBLIC)'">
+          <span v-if="!isBuildingHost && !isHosting">🌐 WEB-BUILD</span>
+          <span v-else-if="isBuildingHost">● BUDUJĘ...</span>
+          <span v-else>● {{ hostUrl.replace('http://','') }} ✕</span>
+        </button>
 
         <button @click="buildExe" :disabled="isBuildingExe" class="btn-footer exe-build" :class="{ running: isBuildingExe }" title="Zbuduj EXE (Downloads/)">
           <span v-if="!isBuildingExe">💿 EXE</span>
@@ -154,6 +227,8 @@ function closeBuildModal() {
           <span v-if="!isRunning">▶ WPUŚĆ NA PARKIET</span>
           <span v-else>● ODPALAM...</span>
         </button>
+
+
 
         <div class="obi-maker-tag">
           <div class="tag-inner"><span class="kanji">先生、玉舐めて</span><span class="maker">KIMONO</span></div>
@@ -209,6 +284,54 @@ function closeBuildModal() {
       </div>
     </transition>
 
+    <!-- ========== BUILD HOST MODAL - CYAN VHS - zamiast szarego guzika ========== -->
+    <transition name="build-modal">
+      <div v-if="isBuildingHost" class="build-overlay" @click.self="closeHostModal">
+        <div class="build-modal-vhs host-modal">
+          <div class="vhs-scanlines"></div>
+          <div class="vhs-noise"></div>
+          
+          <div class="build-header host-header">
+            <div class="build-title-wrap">
+              <span class="build-icon">📦</span>
+              <h2 class="build-title host-title">BUDUJĘ PACZKĘ</h2>
+              <span class="build-vhs host-vhs">ZIP • DOWNLOADS • NO-LOCALHOST</span>
+            </div>
+            <button v-if="hostBuildStep.includes('BŁĄD') || hostBuildStep.includes('GOTOWA') || hostBuildStep.includes('GOTOWE')" @click="isBuildingHost = false" class="build-close host-close">✕</button>
+            <div v-else class="build-rec host-rec">
+              <span class="rec-dot host-dot"></span>REC
+            </div>
+          </div>
+
+          <div class="build-body">
+            <div class="build-step host-step" :class="{ error: hostBuildStep.includes('BŁĄD'), done: hostBuildStep.includes('GOTOWA') || hostBuildStep.includes('GOTOWE') }">
+              {{ hostBuildStep }}
+            </div>
+            
+            <div class="build-progress-bar host-bar">
+              <div class="build-progress-fill host-fill" :class="{ done: hostBuildStep.includes('GOTOWA') || hostBuildStep.includes('GOTOWE'), error: hostBuildStep.includes('BŁĄD') }"></div>
+            </div>
+
+            <div class="build-log host-log">
+              <pre>{{ hostBuildLog || 'Przygotowuję piękną paczkę...' }}</pre>
+            </div>
+
+            <div class="build-footer">
+              <div class="build-tip">
+                <span class="tip-label host-label">TIP:</span> Paczka leci do Pobranych - BEZ localhosta, BEZ cache ✨
+              </div>
+              <div v-if="!hostBuildStep.includes('BŁĄD') && !hostBuildStep.includes('GOTOWA') && !hostBuildStep.includes('GOTOWE')" class="build-wait host-wait">
+                Nie zamykaj edytora, to potrwa ~10s... dotnet publish + zip...
+              </div>
+              <div v-if="hostBuildStep.includes('GOTOWA') || hostBuildStep.includes('GOTOWE')" class="build-success host-success">
+                🎉 Paczka gotowa w Downloads! Zero localhosta! 🎉
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
+
     <transition name="toast"><div v-if="showSavedToast" class="toast-saved">✓ Zapisano</div></transition>
     <div v-if="showTutorial" class="modal-overlay" @click.self="showTutorial = false">
       <div class="modal-content tutorial-content">
@@ -225,6 +348,46 @@ function closeBuildModal() {
 :root { --bg:#0D0B14; --panel:#16131F; --card:#1C1929; --input:#151221; --border:#2A2440; --mustard:#D4A574; --mustard-bright:#E7C36A; --shiro:#E5E7EB; --text:#E6EDF3; --text-dim:#9CA3AF; --pl-red:#CE0E2D; }
 * { box-sizing:border-box; font-family:'Inter',system-ui,sans-serif; }
 body { background:var(--bg); margin:0; color:var(--text); overflow-x:hidden; }
+
+/* HOST BUTTON - cyan */
+.btn-footer.host.cyan {
+  background: linear-gradient(180deg, #0e2a2f 0%, #0a1e22 100%);
+  border-color: #00d9ff;
+  color: #7defff;
+  box-shadow: 0 0 0 1px #001a1e, 2px 2px 0 #000, 0 0 12px rgba(0,217,255,0.25);
+}
+.btn-footer.host.cyan:hover {
+  background: linear-gradient(180deg, #12343a 0%, #0e2a2f 100%);
+  color: #aaffff;
+  box-shadow: 0 0 0 1px #00d9ff, 3px 3px 0 #000, 0 0 20px rgba(0,217,255,0.4);
+}
+.btn-footer.host.cyan.running {
+  background: #00d9ff;
+  color: #001a1e;
+  border-color: #7defff;
+  box-shadow: 0 0 0 1px #7defff, 0 0 20px rgba(0,217,255,0.6);
+  animation: host-pulse 1.2s infinite;
+}
+@keyframes host-pulse { 0%,100% { box-shadow: 0 0 0 1px #7defff, 0 0 12px rgba(0,217,255,0.4); } 50% { box-shadow: 0 0 0 1px #7defff, 0 0 24px rgba(0,217,255,0.8); } }
+
+/* HOST MODAL - CYAN VARIANT - zamiast szarego guzika */
+.host-modal { border-color: #00d9ff !important; box-shadow: 0 0 0 1px #001a1e, 0 8px 32px rgba(0,0,0,0.6), 0 0 24px rgba(0,217,255,0.15) !important; }
+.host-header { background: linear-gradient(90deg, #0a1e22 0%, #0e2a2f 100%) !important; border-bottom-color: #00d9ff !important; }
+.host-title { color: #7defff !important; }
+.host-vhs { background: #001a1e !important; color: #00d9ff !important; border: 1px solid rgba(0,217,255,0.3); }
+.host-rec { color: #00d9ff !important; }
+.host-dot { background: #00d9ff !important; box-shadow: 0 0 8px #00d9ff !important; }
+.host-close { border-color: #00d9ff !important; color: #7defff !important; }
+.host-close:hover { background: #0e2a2f !important; color: #aaffff !important; }
+.host-step { color: #7defff !important; background: rgba(0,217,255,0.08) !important; border-color: rgba(0,217,255,0.2) !important; }
+.host-step.done { color: #4ade80 !important; }
+.host-bar { border-color: #0e2a2f !important; }
+.host-fill { background: linear-gradient(90deg, #0a1e22 0%, #00d9ff 50%, #7defff 100%) !important; box-shadow: 0 0 8px rgba(0,217,255,0.4) !important; }
+.host-fill.done { background: #4ade80 !important; }
+.host-log { border-color: #0e2a2f !important; }
+.host-label { color: #00d9ff !important; }
+.host-wait { color: #7defff !important; background: rgba(0,217,255,0.08) !important; border-color: rgba(0,217,255,0.2) !important; }
+.host-success { color: #7defff !important; }
 </style>
 
 <style scoped>
@@ -534,4 +697,44 @@ body { background:var(--bg); margin:0; color:var(--text); overflow-x:hidden; }
 .modal-content { background:var(--panel); border:1.5px solid var(--border); border-radius:8px; padding:20px; max-width:90vw; max-height:90vh; overflow:auto; position:relative; box-shadow: 0 8px 32px rgba(0,0,0,0.6); }
 .close-btn { position:absolute; top:10px; right:10px; background:#1a1214; border:1.5px solid #2a1a1e; color:var(--text-dim); width:28px; height:28px; border-radius:4px; cursor:pointer; }
 .tutorial-img { max-width:100%; height:auto; display:block; }
+
+/* HOST BUTTON - cyan */
+.btn-footer.host.cyan {
+  background: linear-gradient(180deg, #0e2a2f 0%, #0a1e22 100%);
+  border-color: #00d9ff;
+  color: #7defff;
+  box-shadow: 0 0 0 1px #001a1e, 2px 2px 0 #000, 0 0 12px rgba(0,217,255,0.25);
+}
+.btn-footer.host.cyan:hover {
+  background: linear-gradient(180deg, #12343a 0%, #0e2a2f 100%);
+  color: #aaffff;
+  box-shadow: 0 0 0 1px #00d9ff, 3px 3px 0 #000, 0 0 20px rgba(0,217,255,0.4);
+}
+.btn-footer.host.cyan.running {
+  background: #00d9ff;
+  color: #001a1e;
+  border-color: #7defff;
+  box-shadow: 0 0 0 1px #7defff, 0 0 20px rgba(0,217,255,0.6);
+  animation: host-pulse 1.2s infinite;
+}
+@keyframes host-pulse { 0%,100% { box-shadow: 0 0 0 1px #7defff, 0 0 12px rgba(0,217,255,0.4); } 50% { box-shadow: 0 0 0 1px #7defff, 0 0 24px rgba(0,217,255,0.8); } }
+
+/* HOST MODAL - CYAN VARIANT - zamiast szarego guzika */
+.host-modal { border-color: #00d9ff !important; box-shadow: 0 0 0 1px #001a1e, 0 8px 32px rgba(0,0,0,0.6), 0 0 24px rgba(0,217,255,0.15) !important; }
+.host-header { background: linear-gradient(90deg, #0a1e22 0%, #0e2a2f 100%) !important; border-bottom-color: #00d9ff !important; }
+.host-title { color: #7defff !important; }
+.host-vhs { background: #001a1e !important; color: #00d9ff !important; border: 1px solid rgba(0,217,255,0.3); }
+.host-rec { color: #00d9ff !important; }
+.host-dot { background: #00d9ff !important; box-shadow: 0 0 8px #00d9ff !important; }
+.host-close { border-color: #00d9ff !important; color: #7defff !important; }
+.host-close:hover { background: #0e2a2f !important; color: #aaffff !important; }
+.host-step { color: #7defff !important; background: rgba(0,217,255,0.08) !important; border-color: rgba(0,217,255,0.2) !important; }
+.host-step.done { color: #4ade80 !important; }
+.host-bar { border-color: #0e2a2f !important; }
+.host-fill { background: linear-gradient(90deg, #0a1e22 0%, #00d9ff 50%, #7defff 100%) !important; box-shadow: 0 0 8px rgba(0,217,255,0.4) !important; }
+.host-fill.done { background: #4ade80 !important; }
+.host-log { border-color: #0e2a2f !important; }
+.host-label { color: #00d9ff !important; }
+.host-wait { color: #7defff !important; background: rgba(0,217,255,0.08) !important; border-color: rgba(0,217,255,0.2) !important; }
+.host-success { color: #7defff !important; }
 </style>
