@@ -58,9 +58,7 @@ func (a *App) BuildExeGame(projectPath string) (string, error) {
         _ = os.MkdirAll(filepath.Join(engineRoot, "wwwroot", "images"), 0755)
         _ = os.MkdirAll(filepath.Join(engineRoot, "Assets", "data", "images"), 0755)
         for _, p := range []string{
-                filepath.Join(engineRoot, "wwwroot", "images", "av_tutorial.png"),
-                filepath.Join(engineRoot, "wwwroot", "data", "images", "av_tutorial.png"),
-                filepath.Join(engineRoot, "Assets", "data", "images", "av_tutorial.png"),
+
                 filepath.Join(engineRoot, "wwwroot", "images", "bg_tutorial.webp"),
                 filepath.Join(engineRoot, "Assets", "data", "images", "bg_tutorial.webp"),
         } {
@@ -479,10 +477,6 @@ func (a *App) BuildPublicPack(projectPath string) (string, error) {
         _ = os.MkdirAll(filepath.Join(engineRoot, "Assets", "data", "images"), 0755)
         _ = os.MkdirAll(filepath.Join(engineRoot, "Assets", "wwwroot", "data", "images"), 0755)
         for _, p := range []string{
-                filepath.Join(engineRoot, "wwwroot", "images", "av_tutorial.png"),
-                filepath.Join(engineRoot, "wwwroot", "data", "images", "av_tutorial.png"),
-                filepath.Join(engineRoot, "Assets", "data", "images", "av_tutorial.png"),
-                filepath.Join(engineRoot, "Assets", "wwwroot", "data", "images", "av_tutorial.png"),
                 filepath.Join(engineRoot, "wwwroot", "images", "bg_tutorial.webp"),
                 filepath.Join(engineRoot, "wwwroot", "data", "images", "bg_tutorial.webp"),
                 filepath.Join(engineRoot, "Assets", "data", "images", "bg_tutorial.webp"),
