@@ -11,6 +11,9 @@
     <BlazorWebAssemblyEnableTrimming Condition="'$(Configuration)'=='Release'">false</BlazorWebAssemblyEnableTrimming>
     <TrimMode>full</TrimMode>
     <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
+    <BlazorEnableCompression>false</BlazorEnableCompression>
+    <CompressionEnabled>false</CompressionEnabled>
+    <BlazorWebAssemblyEnableCompression>false</BlazorWebAssemblyEnableCompression>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,7 +30,6 @@
     <DataFiles Include="$(GameAssetsRoot)\*.json" />
   </ItemGroup>
 
-  <!-- FIX: .keep nie jest assetem - ignoruj -->
   <ItemGroup>
     <Content Remove="wwwroot\**\.keep" />
     <Content Remove="wwwroot\**\.gitkeep" />
@@ -37,7 +39,6 @@
     <StaticWebAsset Remove="wwwroot\**\.gitkeep" />
   </ItemGroup>
 
-  <!-- FIX: **\* zamiast **\*.* zeby skasowac tez .keep -->
   <Target Name="JanuszClean" BeforeTargets="PrepareForBuild;ResolveStaticWebAssetsInputs;BeforeBuild">
     <ItemGroup>
       <OldDataFiles Include="wwwroot\data\**\*" />
@@ -58,13 +59,31 @@
     <Copy SourceFiles="@(GameImages)" DestinationFolder="wwwroot\Images\%(RecursiveDir)" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(SoundFiles)" DestinationFolder="wwwroot\sounds\%(RecursiveDir)" SkipUnchangedFiles="false" Condition="Exists('$(GameAssetsRoot)\sounds')" />
     <Copy SourceFiles="@(DataFiles)" DestinationFolder="wwwroot\data\%(RecursiveDir)" SkipUnchangedFiles="false" />
+    <!-- FIX: kopiuj project.janproj W SZYBKO wszędzie gdzie gra może go szukać -->
     <Copy SourceFiles="$(GameAssetsRoot)\project.janproj" DestinationFolder="wwwroot" SkipUnchangedFiles="false" Condition="Exists('$(GameAssetsRoot)\project.janproj')" />
+    <Copy SourceFiles="$(GameAssetsRoot)\project.janproj" DestinationFolder="wwwroot\data" SkipUnchangedFiles="false" Condition="Exists('$(GameAssetsRoot)\project.janproj')" />
+    <Copy SourceFiles="$(GameAssetsRoot)\Data\project.janproj" DestinationFolder="wwwroot" SkipUnchangedFiles="false" Condition="Exists('$(GameAssetsRoot)\Data\project.janproj')" />
     <Copy SourceFiles="$(GameAssetsRoot)\Data\project.janproj" DestinationFolder="wwwroot\data" SkipUnchangedFiles="false" Condition="Exists('$(GameAssetsRoot)\Data\project.janproj')" />
+    <Copy SourceFiles="$(GameAssetsRoot)\data\project.janproj" DestinationFolder="wwwroot" SkipUnchangedFiles="false" Condition="Exists('$(GameAssetsRoot)\data\project.janproj')" />
     <Copy SourceFiles="$(GameAssetsRoot)\data\project.janproj" DestinationFolder="wwwroot\data" SkipUnchangedFiles="false" Condition="Exists('$(GameAssetsRoot)\data\project.janproj')" />
     <Message Text="COPIED FROM $(GameAssetsRoot) -> wwwroot: @(DataFiles)" Importance="high" />
   </Target>
 
   <Target Name="EnsureDataPlaceholder" AfterTargets="CopyGameAssets" BeforeTargets="ResolveStaticWebAssetsInputs">
     <MakeDir Directories="wwwroot\data" />
+  </Target>
+
+  <Target Name="DeleteBrotliForItch" AfterTargets="Publish">
+    <ItemGroup>
+      <ItchBrFiles Include="$(PublishDir)wwwroot\_framework\**\*.br" />
+      <ItchGzFiles Include="$(PublishDir)wwwroot\_framework\**\*.gz" />
+      <ItchBrFiles2 Include="$(PublishDir)wwwroot\**\*.br" />
+      <ItchGzFiles2 Include="$(PublishDir)wwwroot\**\*.gz" />
+    </ItemGroup>
+    <Delete Files="@(ItchBrFiles)" />
+    <Delete Files="@(ItchGzFiles)" />
+    <Delete Files="@(ItchBrFiles2)" />
+    <Delete Files="@(ItchGzFiles2)" />
+    <Message Text="DELETED .br/.gz FOR ITCH.IO" Importance="high" />
   </Target>
 </Project>
