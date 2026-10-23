@@ -579,10 +579,26 @@ body { background:var(--bg); margin:0; color:var(--text); overflow-x:hidden; }
   text-shadow: 0 0.5px 0 rgba(255,255,255,0.25);
 }
 
+/* FIX PANCERNY - metka nie lapie hovera */
+.obi-maker-tag {
+  transform: rotate(-1.2deg) translateY(1px) translateZ(0) !important;
+  will-change: transform !important;
+  backface-visibility: hidden !important;
+  isolation: isolate !important;
+  contain: layout style paint !important;
+}
+.obi-maker-tag .kanji,
+.obi-maker-tag .maker {
+  font-synthesis: none !important;
+  -webkit-font-smoothing: antialiased !important;
+  text-rendering: geometricPrecision !important;
+  backface-visibility: hidden !important;
+}
+
 
 .btn-footer { font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; padding:7px 12px; border-radius:4px; border:1.5px solid #000; cursor:pointer; background:#1C1929; color:var(--text); box-shadow: 2px 2px 0 #000; transition: all 0.12s ease; white-space:nowrap; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; min-height:32px; }
-.btn-footer:hover { transform: translate(-1px,-1px); box-shadow: 3px 3px 0 #000; }
-.btn-footer:active { transform: translate(1px,1px); box-shadow: 1px 1px 0 #000; }
+.btn-footer:hover { transform: none !important; box-shadow: 2px 2px 0 #000 !important; filter: brightness(1.12) !important; }
+.btn-footer:active { transform: none !important; box-shadow: 1px 1px 0 #000 !important; filter: brightness(0.95) !important; }
 .btn-footer:disabled { opacity:0.6; cursor:not-allowed; transform:none; }
 .btn-footer.save { background:#1a1f2e; border-color:#2A3441; color:#7DD3FC; min-width:132px; }
 .btn-footer.menu { background:#16131F; border-color:#2A2440; color:var(--text-dim); }

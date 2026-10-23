@@ -56,3 +56,4 @@ dist/
 *.exe
 *.zip
 [STRIPPED 134 bytes]
+engine/Assets/
