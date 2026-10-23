@@ -1,11 +1,13 @@
 using System;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.WinForms;
+using Microsoft.Web.WebView2.Core;
 
 class Program {
     static string GetMime(string path) {
@@ -29,49 +31,72 @@ class Program {
         };
     }
 
+    static string FindWwwrootZip() {
+        var candidates = new[] {
+            Path.Combine(AppContext.BaseDirectory, "wwwroot.zip"),
+            Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "wwwroot.zip"),
+            Path.Combine(Directory.GetCurrentDirectory(), "wwwroot.zip"),
+            Path.Combine(Path.GetTempPath(), "KimonoGM", "wwwroot.zip"),
+        };
+        // w single file mode AppContext.BaseDirectory to temp .net folder
+        foreach (var p in candidates) if (File.Exists(p)) return p;
+        // szukaj rekurencyjnie w baseDir
+        try {
+            foreach (var f in Directory.GetFiles(AppContext.BaseDirectory, "wwwroot.zip", SearchOption.AllDirectories)) {
+                if (File.Exists(f)) return f;
+            }
+        } catch {}
+        return null;
+    }
+
     [STAThread]
     static void Main() {
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
-        var baseDir = AppContext.BaseDirectory;
-        var wwwroot = Path.Combine(baseDir, "wwwroot");
-        if (!Directory.Exists(wwwroot) || !File.Exists(Path.Combine(wwwroot, "index.html"))) {
-            var candidates = new[] {
-                Path.Combine(baseDir, "wwwroot"),
-                Path.Combine(baseDir, "..", "dist", "wwwroot"),
-                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot"),
+
+        var exeName = Path.GetFileNameWithoutExtension(Application.ExecutablePath);
+        var tempRoot = Path.Combine(Path.GetTempPath(), "KimonoGM", exeName);
+        var wwwroot = Path.Combine(tempRoot, "wwwroot");
+
+        // znajdz zip
+        var wwwrootZip = FindWwwrootZip();
+
+        try {
+            if (!string.IsNullOrEmpty(wwwrootZip) && File.Exists(wwwrootZip)) {
+                var marker = Path.Combine(tempRoot, "_ver.txt");
+                var zipTime = File.GetLastWriteTimeUtc(wwwrootZip).Ticks.ToString() + "_" + new FileInfo(wwwrootZip).Length.ToString();
+                var needExtract = true;
+                if (File.Exists(marker) && File.ReadAllText(marker) == zipTime && Directory.Exists(wwwroot) && File.Exists(Path.Combine(wwwroot, "index.html"))) {
+                    needExtract = false;
+                }
+                if (needExtract) {
+                    if (Directory.Exists(wwwroot)) try { Directory.Delete(wwwroot, true); } catch {}
+                    Directory.CreateDirectory(wwwroot);
+                    ZipFile.ExtractToDirectory(wwwrootZip, wwwroot, true);
+                    Directory.CreateDirectory(tempRoot);
+                    File.WriteAllText(marker, zipTime);
+                }
+            }
+        } catch (Exception ex) {
+            MessageBox.Show("Blad wypakowania wwwroot.zip: " + ex.Message + "\nZip: " + wwwrootZip + "\nTemp: " + tempRoot);
+        }
+
+        if (!File.Exists(Path.Combine(wwwroot, "index.html"))) {
+            var fallback = new[] {
+                Path.Combine(AppContext.BaseDirectory, "wwwroot"),
+                Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "wwwroot"),
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "wwwroot"),
             };
-            foreach (var c in candidates) if (Directory.Exists(c) && File.Exists(Path.Combine(c, "index.html"))) { wwwroot = c; break; }
-            if (!File.Exists(Path.Combine(wwwroot, "index.html"))) {
-                try {
-                    var dl = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
-                    if (Directory.Exists(dl)) {
-                        foreach (var dir in Directory.GetDirectories(dl, "*-EXE-*").OrderByDescending(d => d)) {
-                            var p = Path.Combine(dir, "wwwroot");
-                            if (File.Exists(Path.Combine(p, "index.html"))) { wwwroot = p; break; }
-                        }
-                    }
-                } catch {}
-            }
-            if (!File.Exists(Path.Combine(wwwroot, "index.html"))) {
-                try {
-                    foreach (var dir in Directory.GetDirectories(baseDir)) {
-                        var p = Path.Combine(dir, "wwwroot");
-                        if (File.Exists(Path.Combine(p, "index.html"))) { wwwroot = p; break; }
-                        var p2 = Path.Combine(dir, "wwwroot", "wwwroot");
-                        if (File.Exists(Path.Combine(p2, "index.html"))) { wwwroot = p2; break; }
-                    }
-                } catch {}
+            foreach (var c in fallback) {
+                if (File.Exists(Path.Combine(c, "index.html"))) { wwwroot = c; break; }
             }
         }
 
         if (!File.Exists(Path.Combine(wwwroot, "index.html"))) {
-            MessageBox.Show("Brak wwwroot/index.html w " + wwwroot + "\nSzukano w:\n" + baseDir + "/wwwroot\nDownloads/wwwroot\nDownloads/*-EXE-*/wwwroot");
+            MessageBox.Show("Brak wwwroot/index.html\nSzukano w:\n" + wwwroot + "\nZip: " + (wwwrootZip ?? "nie znaleziono") + "\nBaseDir: " + AppContext.BaseDirectory + "\nExeDir: " + Path.GetDirectoryName(Application.ExecutablePath));
             return;
         }
 
-        // znajdz wolny port
         int port = 0;
         var tcp = new TcpListener(IPAddress.Loopback, 0);
         tcp.Start();
@@ -86,23 +111,15 @@ class Program {
             while (http.IsListening) {
                 try {
                     var ctx = http.GetContext();
-                    var req = ctx.Request;
                     var resp = ctx.Response;
-                    var urlPath = req.Url.AbsolutePath.TrimStart('/');
+                    var urlPath = ctx.Request.Url.AbsolutePath.TrimStart('/');
                     if (string.IsNullOrEmpty(urlPath)) urlPath = "index.html";
-                    // zabezpiecz przed .. 
                     var filePath = Path.GetFullPath(Path.Combine(wwwroot, urlPath.Replace('/', Path.DirectorySeparatorChar)));
                     if (!filePath.StartsWith(Path.GetFullPath(wwwroot), StringComparison.OrdinalIgnoreCase)) {
                         filePath = Path.Combine(wwwroot, "index.html");
                     }
-                    if (!File.Exists(filePath)) {
-                        // SPA fallback - jesli plik nie istnieje a nie ma rozszerzenia, zwroc index.html
-                        if (!Path.HasExtension(filePath) || !File.Exists(filePath)) {
-                            // sprobuj czy to nie jest _framework, css itp - jesli nie ma, to index.html
-                            if (!File.Exists(filePath) && !urlPath.Contains(".")) {
-                                filePath = Path.Combine(wwwroot, "index.html");
-                            }
-                        }
+                    if (!File.Exists(filePath) && !urlPath.Contains(".")) {
+                        filePath = Path.Combine(wwwroot, "index.html");
                     }
                     if (File.Exists(filePath)) {
                         var bytes = File.ReadAllBytes(filePath);
@@ -120,12 +137,25 @@ class Program {
             }
         });
 
-        var form = new Form() { Width=1280, Height=800, Text="Janusz Simulator 97 - Manieczki", StartPosition=FormStartPosition.CenterScreen };
+        var baseDir = AppContext.BaseDirectory;
+        var iconPath = Path.Combine(baseDir, "icon.ico");
+        if (!File.Exists(iconPath)) iconPath = Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "icon.ico");
+        System.Drawing.Icon icon = null;
+        if (File.Exists(iconPath)) { try { icon = new System.Drawing.Icon(iconPath); } catch {} }
+
+        var form = new Form() { Width=1280, Height=800, Text="KimonoGM Game", StartPosition=FormStartPosition.CenterScreen, Icon = icon };
         var webView = new WebView2() { Dock=DockStyle.Fill };
         form.Controls.Add(webView);
         form.FormClosed += (s,e) => { try { http.Stop(); } catch {} Environment.Exit(0); };
         form.Load += async (s,e) => {
-            await webView.EnsureCoreWebView2Async();
+            try {
+                var webView2Temp = Path.Combine(Path.GetTempPath(), "KimonoGM", "WebView2", exeName);
+                Directory.CreateDirectory(webView2Temp);
+                var env = await CoreWebView2Environment.CreateAsync(null, webView2Temp);
+                await webView.EnsureCoreWebView2Async(env);
+            } catch {
+                await webView.EnsureCoreWebView2Async();
+            }
             webView.CoreWebView2.Navigate($"http://localhost:{port}/");
         };
         Application.Run(form);

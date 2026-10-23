@@ -1,4 +1,5 @@
 @page "/"
+@page "/index.html"
 @inject GameEngine GameEngine
 @inject IJSRuntime JS
 @implements IDisposable
@@ -11,7 +12,21 @@
     <span class="piwo-cena">3zł</span>
 </div>
 
-@if (GameEngine.GameState != null)
+@if (isLoading)
+{
+    <div style="color:white;background:#111;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;position:fixed;top:0;left:0;z-index:9999">
+        <h1 style="font-family:monospace">ŁADOWANIE JANUSZA...</h1>
+        <p style="font-family:monospace">@loadingStatus</p>
+    </div>
+}
+else if (loadError != null)
+{
+    <div style="color:#ff5555;background:black;width:100vw;height:100vh;padding:20px;position:fixed;top:0;left:0;z-index:9999;overflow:auto">
+        <h1>BŁĄD ŁADOWANIA</h1>
+        <pre style="white-space:pre-wrap">@loadError</pre>
+    </div>
+}
+else if (GameEngine.GameState != null)
 {
     <div class="game-container" @onclick="CloseDrawer">
         <img src="@GameEngine.GameState.BackgroundImage" class="background" />
@@ -86,9 +101,11 @@
 
 @code {
     private bool showChoices = false;
-    private System.Threading.Timer? narratorTimer;
-    private Random rnd = new Random();
+    private bool isLoading = true;
+    private string loadingStatus = "Start...";
+    private string? loadError = null;
     private bool gameStarted = false;
+    private Random rnd = new Random();
 
     private void ToggleChoices() => showChoices = !showChoices;
     private void CloseDrawer() { if (showChoices) showChoices = false; }
@@ -110,7 +127,6 @@
         if (scene.Contains("urzad")) news.Add("PODATKI: Janusz sklada PIT");
         if (scene.Contains("blok")) news.Add("SPOLECZENSTWO: Sasiadka skarży sie na smietnik");
         if (scene.Contains("wieczor")) news.Add("RODZINA: Grażyna żąda wypłaty");
-        // FIX: używaj normalizowanych ID zamiast "a", "d"
         if (s.Get("CEBULA") > 50) news.Add("SUKCES: Janusz mistrzem cebuli");
         if (s.Get("PORTFEL") < 50) news.Add("BIEDA: Portfel swieci pustkami");
         if (s.Get("WSTYD") > 70) news.Add("WSTYD: Sąsiedzi patrzą krzywo");
@@ -119,10 +135,7 @@
     }
 
     private async Task MakeChoice(Choice choice) {
-        if (!gameStarted) 
-        { 
-            gameStarted = true; 
-        }
+        if (!gameStarted) gameStarted = true; 
         await GameEngine.MakeChoice(choice);
     }
 
@@ -135,24 +148,31 @@
         await GameEngine.LoadGame(); 
     }
 
-
     private void ShowStats() {
         var s = GameEngine.GameState.Stats; 
         var defs = GameEngine.GameState.StatDefs; 
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("KONIEC DNIA JANUSZA:\n"); 
         foreach(var d in defs) sb.AppendLine($"{d.name}: {s.Get(d.id)}");
-        // FIX: też normalizowane ID
         var cebula = s.Get("CEBULA");
         sb.AppendLine($"\nGrazyna jest {(cebula > 30 ? "DUMNA" : "WKURWIONA")}.");
         GameEngine.GameState.NarrationText = sb.ToString(); 
         StateHasChanged();
     }
 
-    protected override async Task OnInitializedAsync() { await GameEngine.LoadGame(); GameEngine.StateChanged += OnStateChanged; }
+    protected override async Task OnInitializedAsync() { 
+        try {
+            loadingStatus = "Ładuję grę...";
+            await GameEngine.LoadGame(); 
+            loadingStatus = "Gotowe!";
+        } catch (Exception ex) {
+            loadError = ex.ToString();
+        } finally {
+            isLoading = false;
+        }
+        GameEngine.StateChanged += OnStateChanged; 
+    }
+    
     private void OnStateChanged() => InvokeAsync(StateHasChanged);
-
-
-
     public void Dispose() { GameEngine.StateChanged -= OnStateChanged; }
 }
