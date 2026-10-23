@@ -1,12 +1,16 @@
 # KIMONO GM — janusz-maker / editor 1.0
+**Windows:** [KimonoGM.exe](https://github.com/CapitanPlanet/KimonoGM/releases/download/v1.3-obi-dark-manieczki/KimonoGM.exe)
+**Przeglądarka (bez instalacji):** [Graj na itch.io](https://xsepergmailcom.itch.io/kimonogm-test)
+
 
 > **NO PAIN NO KIEŁBASA — RAN FOR JUR LAJF — FAJT KLUB MANIECKI**
-> `VHS • 1994 • MANIECKI • 02:17 • PARKIET`
 
 **Non-profitowy edytor do robienia absurdalnych visual noveli dla znajomych.** 
-Twój Janusz w złotym kimono, kula dysko, kolejka jak za komuny przy barze. Ty to piszesz, silnik to odtwarza.
+Twórz co chcesz i jak chcesz... Na własną odpowiedzialność
 
-[Kimono Editor Screenshot](docs/screenshots/editor-1.3-obi-textured.png)
+
+
+Nie jestem korpo. Jestem Janusz... Znaczy Michał jestem. Ale z połączonych żywiołów: Tanie piwo, głupie pomysły, zj!@#e życiowe, Łódź Bałuty, iiii coś tam jeszcze. POWSTAJE JA, KAPITAN MICHAŁ!!!! 
 
 ---
 
@@ -14,7 +18,7 @@ Twój Janusz w złotym kimono, kula dysko, kolejka jak za komuny przy barze. Ty 
 
 **KimonoGM** to monorepo: edytor + silnik + przykładowe gry. Robisz grę w edytorze Wails/Vue, klikasz BUILD i dostajesz EXE lub wersję web na GitHub Pages.
 
-Inspiracja: polskie wesela, lata 90., Janusze, disco, oranżada przy barze i decyzje typu `Zamów oranżadę przy barze` vs `Wbij na parkiet`.
+Inspiracja: Stara gra na Iphone Episode; ale za darmo i bez limitów. Używaj AI , pisz, nagrywaj, rób co chcesz :D
 
 ```
 Wchodzisz do Manieczek. Kula dysko kręci się nad głową, 
@@ -40,9 +44,9 @@ UI: neon tube na górze, stonowany pas obi na dole z fakturą płótna, VHS vibe
 | Warstwa | Tech | Po co |
 |---|---|---|
 | **editor** | Go + Wails + Vue 3 + TypeScript | natywna apka desktop, szybka, bez Electrona |
-| **engine** | C# / JanuszSimulator (własny) | odtwarza gry, logika scen |
+| **engine** | C# (własny) | odtwarza gry, logika scen |
 | **runtime** | Go / WebAssembly | eksport WEB |
-| **hosting** | GitHub Pages `/docs` | demo wersji web |
+| **hosting** | GitHub Pages `/docs` | itch.io | demo wersji web |
 
 ```
 KimonoGM/
@@ -120,8 +124,6 @@ Tworzenie projektu:
 - [ ] **ETAP 5** — Steam Workshop dla Januszy, multiplayer na parkiecie
 
 ### Styl projektu
-
-Nie jesteśmy korpo. Jesteśmy fajtem z Manieczek.
 
 - Fonty: `Bebas Neue` / `JetBrains Mono` / `Inter`
 - Kolory: `#0D0B14` bg, `#D4A574` mustard, `#E5E7EB` shiro, `#a89c85` obi beige, `#6e1f28` bordo
