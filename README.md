@@ -1,12 +1,12 @@
 # KIMONO GM — janusz-maker / editor 1.0
 **Windows:** [KimonoGM.exe](https://github.com/CapitanPlanet/KimonoGM/releases/download/v1.3-obi-dark-manieczki/KimonoGM.exe)
-**Przeglądarka (bez instalacji):** [Graj na itch.io](https://xsepergmailcom.itch.io/kimonogm-test)
-
+**Przeglądarka (bez instalacji)** [Graj na itch.io](https://xsepergmailcom.itch.io/kimonogm-test)
+**Screenshot** https://zapodaj.net/plik-oM4aF7TjWO
 
 > **NO PAIN NO KIEŁBASA — RAN FOR JUR LAJF — FAJT KLUB MANIECKI**
 
 **Non-profitowy edytor do robienia absurdalnych visual noveli dla znajomych.** 
-Twórz co chcesz i jak chcesz... Na własną odpowiedzialność
+Twórz co chcesz i jak chcesz (Na własną odpowiedzialność)
 
 
 
