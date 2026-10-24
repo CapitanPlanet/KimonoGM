@@ -90,8 +90,7 @@ func (a *App) BuildExeGame(projectPath string) (string, error) {
 		})
 	}
 
-	exec.Command("taskkill", "/F", "/IM", "KimonoGM.exe").Run()
-	exec.Command("taskkill", "/F", "/IM", "MakerEngine.exe").Run()
+_ = a.StopGame() // bezpieczne
 	time.Sleep(500 * time.Millisecond)
 
 	cmd := exec.Command("dotnet", "publish", "-c", "Release", "-o", distRoot, "-p:StaticWebAssetsCompressContent=false", "-p:StaticWebAssetCompressionMode=None", "-p:PublishTrimmed=false", "-p:BlazorWebAssemblyEnableTrimming=false")
