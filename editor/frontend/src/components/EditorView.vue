@@ -47,12 +47,37 @@ async function toggleHost() {
 }
 onMounted(async()=>{ try{ const [running,port,url]=await GetHostStatus(); if(running){ isHosting.value=true; hostUrl.value=url } }catch{} })
 
-async function runParkiet(e: MouseEvent) {
-  const isBuild = e.shiftKey; if (!store.projectPath) return
-  try { isRunning.value=true; if(isBuild){ statusMsg.value='● BUILD RELEASE...'; await BuildGame(store.projectPath); statusMsg.value='✓ Zbudowano w dist/'; setTimeout(()=>statusMsg.value='',2500) }
-  else { await saveProject(); statusMsg.value='● BUDUJĘ PARKIET...'; await RunGame(store.projectPath); statusMsg.value='✓ PARKIET GOTOWY'; window.open(`http://localhost:5020/?nocache=${Date.now()}`,'_blank'); setTimeout(()=>statusMsg.value='',2500) } }
-  catch(err:any){ const msg=err?.message||String(err); statusMsg.value='⚠ '+msg; alert('Błąd: '+msg) } finally{ setTimeout(()=>isRunning.value=false,1000) }
+async function runParkiet(e?: MouseEvent) {
+  // Bezpieczne sprawdzenie: jeśli e jest undefined, isBuild dostanie false
+  const isBuild = e?.shiftKey || false; 
+  if (!store.projectPath) return
+  
+  try { 
+    isRunning.value=true; 
+    if(isBuild){ 
+      statusMsg.value='● BUILD RELEASE...'; 
+      await BuildGame(store.projectPath); 
+      statusMsg.value='✓ Zbudowano w dist/'; 
+      setTimeout(()=>statusMsg.value='',2500) 
+    }
+    else { 
+      await saveProject(); 
+      statusMsg.value='● BUDUJĘ PARKIET...'; 
+      await RunGame(store.projectPath); 
+      statusMsg.value='✓ PARKIET GOTOWY'; 
+      window.open(`http://localhost:5020/?nocache=${Date.now()}`,'_blank'); 
+      setTimeout(()=>statusMsg.value='',2500) 
+    } 
+  }
+  catch(err:any){ 
+    const msg=err?.message||String(err); 
+    statusMsg.value='⚠ '+msg; 
+    alert('Błąd: '+msg) 
+  } finally{ 
+    setTimeout(()=>isRunning.value=false,1000) 
+  }
 }
+
 
 async function buildExe() {
   if(!store.projectPath) return

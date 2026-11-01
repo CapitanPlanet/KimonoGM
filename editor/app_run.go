@@ -316,10 +316,17 @@ func (a *App) RunGame(projectPath string) error {
                 }
                 time.Sleep(500 * time.Millisecond)
         }
+
+
+        copyData()
+
         runtime.LogInfo(a.ctx, "[PARKIET] dotnet run --no-build :5020")
         gp := filepath.ToSlash(projectPath)
         prop := fmt.Sprintf("-p:GameAssetsRoot=\"%s\"", strings.ReplaceAll(gp, "\"", ""))
+        
+        // Uruchamiamy proces w bezpiecznym trybie bez kompilacji, bez dotykania flag StaticWebAssets
         runCmd := exec.Command("dotnet", "run", "--no-build", "--project", enginePath, prop, "--urls", "http://localhost:5020", "--no-launch-profile")
+
         runCmd.Dir = engineRoot
         runLogPath := filepath.Join(os.TempDir(), "kimonogm_run.log")
         runLog, _ := os.Create(runLogPath)
