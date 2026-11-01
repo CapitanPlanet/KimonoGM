@@ -132,31 +132,109 @@ body { background:var(--bg); margin:0; color:var(--text); overflow-x:hidden; }
 .main-grid { display:grid; grid-template-columns:280px 280px minmax(400px,1fr) 380px; gap:12px; padding:12px; flex:1; overflow:hidden; min-height:0; padding-bottom:0; min-width:1376px; }
 
 /* 3. STYLOWANIE DLA ŚRODKOWEJ KOLUMNY */
+/* ==========================================================================
+   3. STYLOWANIE DLA ŚRODKOWEJ KOLUMNY (ZMODYFIKOWANE MACRO)
+   ========================================================================== */
 .central-preview-column {
   display: flex;
   flex-direction: column;
   gap: 12px;
   height: 100%;
-  overflow: hidden;
   min-height: 0;
+  overflow: hidden;
 }
 
 .panel-graph {
-  flex: 0 0 260px; /* Przestrzeń pionowa dla grafu (możesz dostosować) */
+  flex: 0 0 340px;      /* Zwiększona przestrzeń dla mapy grafu (z 260px) */
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;     /* Blokada podwójnego scrolla na kontenerze nadrzędnym */
+  display: flex;
+  flex-direction: column;
 }
 
 .panel-canvas-fill {
-  flex: 1; /* Obrazek i reszta zajmują cały dół */
+  flex: 1;              /* Rozciąga podgląd sceny w pionie na całe pozostałe miejsce */
   min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.loading { flex:1; display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-family:'JetBrains Mono',monospace; }
-.toast-saved { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:#1a2e1a; border:1.5px solid #2a5a2a; color:#4ade80; padding:10px 20px; border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; box-shadow:0 4px 12px rgba(0,0,0,0.4),2px 2px 0 #000; z-index:1000; }
-.toast-enter-active,.toast-leave-active{transition:all 0.3s ease} .toast-enter-from,.toast-leave-to{opacity:0;transform:translateX(-50%) translateY(10px)}
-.modal-overlay{position:fixed;inset:0;background:rgba(5,3,10,0.85);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:9998}
-.modal-content{background:var(--panel);border:1.5px solid var(--border);border-radius:8px;padding:20px;max-width:90vw;max-height:90vh;overflow:auto;position:relative;box-shadow:0 8px 32px rgba(0,0,0,0.6)}
-.close-btn{position:absolute;top:10px;right:10px;background:#1a1214;border:1.5px solid #2a1a1e;color:var(--text-dim);width:28px;height:28px;border-radius:4px;cursor:pointer}
-.tutorial-img{max-width:100%;height:auto;display:block}
+/* --- LOGIKA ŁADOWANIA, TOASTY I MODALE --- */
+.loading { 
+  flex: 1; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  color: var(--text-dim); 
+  font-family: 'JetBrains Mono', monospace; 
+}
+
+.toast-saved { 
+  position: fixed; 
+  bottom: 80px; 
+  left: 50%; 
+  transform: translateX(-50%); 
+  background: #1a2e1a; 
+  border: 1.5px solid #2a5a2a; 
+  color: #4ade80; 
+  padding: 10px 20px; 
+  border-radius: 6px; 
+  font-family: 'JetBrains Mono', monospace; 
+  font-size: 12px; 
+  font-weight: 700; 
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4), 2px 2px 0 #000; 
+  z-index: 1000; 
+}
+
+.toast-enter-active, .toast-leave-active { 
+  transition: all 0.3s ease; 
+} 
+
+.toast-enter-from, .toast-leave-to { 
+  opacity: 0; 
+  transform: translateX(-50%) translateY(10px); 
+}
+
+.modal-overlay { 
+  position: fixed; 
+  inset: 0; 
+  background: rgba(5, 3, 10, 0.85); 
+  backdrop-filter: blur(8px); 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  z-index: 9998; 
+}
+
+.modal-content { 
+  background: var(--panel); 
+  border: 1.5px solid var(--border); 
+  border-radius: 8px; 
+  padding: 20px; 
+  max-width: 90vw; 
+  max-height: 90vh; 
+  overflow: auto; 
+  position: relative; 
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6); 
+}
+
+.close-btn { 
+  position: absolute; 
+  top: 10px; 
+  right: 10px; 
+  background: #1a1214; 
+  border: 1.5px solid #2a1a1e; 
+  color: var(--text-dim); 
+  width: 28px; 
+  height: 28px; 
+  border-radius: 4px; 
+  cursor: pointer; 
+}
+
+.tutorial-img { 
+  max-width: 100%; 
+  height: auto; 
+  display: block; 
+}
+
 </style>
