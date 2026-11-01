@@ -126,7 +126,9 @@ watch(choices, async (newChoices) => {
 </template>
 
 <style scoped>
-/* WRAPPER - mobile first */
+/* ==========================================================================
+   ODCHUDZONY I ZREFRAKTOROWANY CSS DLA SCENECANVAS (DESKTOP DRIVEN)
+   ========================================================================== */
 .scene-canvas-wrapper {
   width: 100%;
   height: 100%;
@@ -140,31 +142,20 @@ watch(choices, async (newChoices) => {
 .preview-stage {
   position: relative;
   width: 100%;
-  max-width: 480px; /* max jak telefon */
-  aspect-ratio: 9/16; /* DEFAULT NA TELEFON */
-  background-size: cover; /* FIX NR 1 - było contain i robiło pasy */
+  height: 100%; /* Usuwamy sztywne aspect-ratio, scena bierze 100% wysokości kontenera */
+  background-size: cover;
   background-repeat: no-repeat;
-  background-position: center 30%; /* lekko do góry żeby kula dysko była widoczna */
+  background-position: center 30%;
   background-color: #000;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  border-radius: 16px;
+  border-radius: 12px;
   overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 
-    0 0 0 1px rgba(255,45,149,0.2),
-    0 20px 60px rgba(0,0,0,0.8),
-    0 0 40px rgba(255,45,149,0.15);
-  border: 1px solid rgba(255,255,255,0.08);
-}
-
-/* DESKTOP - szerszy */
-@media (min-width: 1024px) {
-  .preview-stage {
-    aspect-ratio: 16/10;
-    max-width: 100%;
-    border-radius: 12px;
-  }
+    0 0 0 1px rgba(255,45,149,0.15),
+    0 15px 45px rgba(0,0,0,0.8); /* Odchudzona poświata, która nie marnuje przestrzeni */
 }
 
 .no-bg {
@@ -179,25 +170,24 @@ watch(choices, async (newChoices) => {
   background: radial-gradient(ellipse at center, #1a1a23 0%, #08080a 100%);
 }
 
-/* TOP SAFE ZONE - 22% na avatary */
+/* TOP SAFE ZONE - 18% (Zmniejszone, by zyskać przestrzeń na środku) */
 .top-safe-zone {
   position: relative;
   z-index: 3;
-  height: 22%;
-  background: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 100%);
+  height: 18%;
+  background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, transparent 100%);
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding-top: 16px;
+  padding-top: 12px;
   pointer-events: none;
 }
 
 .avatar-placeholder {
-  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .avatar-label {
@@ -208,27 +198,21 @@ watch(choices, async (newChoices) => {
 }
 
 .avatar-glow {
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   border: 1px dashed rgba(255,45,149,0.3);
   background: radial-gradient(circle, rgba(255,45,149,0.08) 0%, transparent 70%);
 }
 
-/* VHS / PAZUR */
+/* KOSMETYKA VHS */
 .vhs-overlay {
   position: absolute;
   inset: 0;
   z-index: 2;
   pointer-events: none;
   opacity: 0.04;
-  background-image: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    white 2px,
-    white 3px
-  );
+  background-image: repeating-linear-gradient(0deg, transparent, transparent 2px, white 2px, white 3px);
 }
 
 .vignette {
@@ -239,23 +223,25 @@ watch(choices, async (newChoices) => {
   background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.5) 100%);
 }
 
-/* BOTTOM */
+/* DOLNA SEKCJA - TEKST + WYBORY */
 .bottom-zone {
   position: relative;
   z-index: 4;
   margin-top: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .preview-text {
-  background: linear-gradient(0deg, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.7) 60%, transparent 100%);
-  padding: 20px 20px 14px 20px;
+  background: linear-gradient(0deg, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.7) 70%, transparent 100%);
+  padding: 16px 20px 12px 20px;
   border-top: 1px solid rgba(255,45,149,0.15);
 }
 
 .preview-text h2 {
   color: #ff2d95;
   font-size: 11px;
-  margin: 0 0 6px 0;
+  margin: 0 0 4px 0;
   text-transform: uppercase;
   letter-spacing: 0.15em;
   text-shadow: 0 0 12px rgba(255,45,149,0.6);
@@ -264,141 +250,56 @@ watch(choices, async (newChoices) => {
 
 .preview-text p {
   color: #fff;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.4;
   margin: 0;
   white-space: pre-wrap;
-  text-shadow: 0 1px 4px rgba(0,0,0,1);
   font-weight: 500;
 }
 
-/* REAKCJA */
-.reaction-overlay {
-  position: absolute;
-  top: 46%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 10;
-  background: rgba(12,12,18,0.92);
-  border: 1px solid rgba(255,45,149,0.4);
-  border-radius: 12px;
-  padding: 10px;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.9), 0 0 20px rgba(255,45,149,0.2);
-  max-width: 72%;
-  backdrop-filter: blur(8px);
-}
-
-.reaction-overlay img {
-  width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
-  border-radius: 8px;
-  display: block;
-}
-
-.reaction-label {
-  font-size: 10px;
-  color: #8a8a9a;
-  font-family: monospace;
-  margin-top: 8px;
-  text-align: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.reaction-enter-active,
-.reaction-leave-active {
-  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.reaction-enter-from,
-.reaction-leave-to {
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(0.85);
-}
-
-/* WYBORY - neon disco */
+/* INTERAKTYWNE WYBORY */
 .preview-choices {
-  background: rgba(8,8,10,0.92);
+  background: rgba(8,8,10,0.95);
   border-top: 1px solid rgba(255,255,255,0.08);
   padding: 10px;
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr 1fr; /* Zawsze dwie kolumny na desktopie */
   gap: 8px;
-  max-height: 34%;
+  max-height: 160px;
   overflow-y: auto;
-  backdrop-filter: blur(12px);
 }
-
-@media (min-width: 768px) {
-  .preview-choices {
-    grid-template-columns: 1fr 1fr;
-  }
-  .choice-btn:last-child:nth-child(odd) {
-    grid-column: 1 / -1;
-  }
-}
-
-.preview-choices::-webkit-scrollbar { width: 4px; }
-.preview-choices::-webkit-scrollbar-thumb { background: #ff2d95; border-radius: 4px; }
 
 .choice-btn {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 11px 12px;
+  padding: 10px 12px;
   background: linear-gradient(180deg, #1f1f2a 0%, #15151e 100%);
   border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 8px;
+  border-radius: 6px;
   color: #b8b8c8;
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
-  transition: all 0.18s;
+  transition: all 0.15s;
   text-align: left;
-  position: relative;
-  overflow: hidden;
-}
-
-.choice-btn::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255,45,149,0.08), transparent);
-  transform: translateX(-100%);
-  transition: transform 0.6s;
-}
-
-.choice-btn:hover::before {
-  transform: translateX(100%);
 }
 
 .choice-btn:hover {
   background: linear-gradient(180deg, #2a2a3a 0%, #1f1f2a 100%);
   border-color: rgba(255,45,149,0.5);
   color: #fff;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 12px rgba(255,45,149,0.25);
-}
-
-.choice-btn.active {
-  border-color: #ff2d95;
-  background: linear-gradient(180deg, #2a1f2e 0%, #1f151e 100%);
-}
-
-.choice-btn.has-reaction {
-  border-left: 2px solid #ff2d95;
+  box-shadow: 0 0 12px rgba(255,45,149,0.2);
 }
 
 .choice-num {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   background: rgba(0,0,0,0.6);
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   flex-shrink: 0;
   color: #ff2d95;
@@ -408,30 +309,31 @@ watch(choices, async (newChoices) => {
   background: #ff2d95;
   color: #000;
   border-color: #ff2d95;
-  box-shadow: 0 0 8px rgba(255,45,149,0.5);
 }
 
 .choice-text {
   flex: 1;
-  line-height: 1.4;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.choice-reaction-icon {
-  font-size: 14px;
-  opacity: 0.7;
-  flex-shrink: 0;
+/* REAKCJA I WARUNKI PUSTE */
+.reaction-overlay {
+  position: absolute;
+  top: 45%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  background: rgba(12,12,18,0.92);
+  border: 1px solid rgba(255,45,149,0.4);
+  border-radius: 8px;
+  padding: 8px;
+  max-width: 60%;
 }
+.reaction-overlay img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; display: block; }
+.reaction-label { font-size: 9px; color: #8a8a9a; margin-top: 6px; text-align: center; }
 
-.no-scene {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: #5a5a6a;
-  font-size: 13px;
-  letter-spacing: 0.05em;
-}
+.no-scene { display: flex; align-items: center; justify-content: center; height: 100%; color: #5a5a6a; font-size: 12px; }
+
 </style>

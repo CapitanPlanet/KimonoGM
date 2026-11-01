@@ -244,13 +244,13 @@ watch(() => store.ui.showAvatarEditor, async (open) => {
   <aside v-if="store.meta" class="side-panel">
     <div class="side-scroll">
       <div class="panel-section highlight">
-        <div class="label">PROJEKT JANUSZA</div>
+        <div class="label">PROJEKT</div>
         <div class="project-name" :title="store.meta?.gameName?? ''">{{ store.meta?.gameName?? '...' }}</div>
         <button @click="store.ui.showAvatarEditor = true" class="btn-janusz">
           <span class="icon">🧠</span>
           <span class="text">
-            <b>KONFIGURUJ JANUSZA</b>
-            <small>{{ avatarRulesCount }} rules • {{ avatarCount }} avatars</small>
+            <b>KONFIGURUJ GLOBALNIE</b>
+            <small>{{ avatarRulesCount }} zasad/y • {{ avatarCount }} avatar/y</small>
           </span>
         </button>
       </div>
@@ -358,48 +358,4 @@ watch(() => store.ui.showAvatarEditor, async (open) => {
   </aside>
 </template>
 
-<style scoped>
-.side-panel{width:280px;min-width:280px;height:100%;background:#0D1117;border-right:1px solid #21262D;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box}
-.side-scroll{flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:16px;padding:12px;box-sizing:border-box}
-.side-scroll::-webkit-scrollbar{width:6px}
-.side-scroll::-webkit-scrollbar-thumb{background:#30363D;border-radius:3px}
-.panel-section{flex-shrink:0;display:flex;flex-direction:column;gap:8px}
-.panel-section.highlight{background:rgba(212,165,116,0.08);border:1px solid rgba(212,165,116,0.25);border-radius:8px;padding:10px}
-.label{font-size:10px;font-weight:700;letter-spacing:1px;color:#7D8590}
-.project-name{font-size:12px;font-family:monospace;color:#E6EDF3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.btn-janusz{margin-top:6px;width:100%;display:flex;gap:10px;align-items:center;background:#161B22;border:1px solid #D4A574;border-radius:6px;padding:10px 12px;color:#E6EDF3;cursor:pointer;text-align:left;box-sizing:border-box}
-.btn-janusz:hover{background:#211E12}
-.days-section{padding-bottom:8px;border-bottom:1px solid #21262D}
-.section-header{display:flex;justify-content:space-between;align-items:center}
-.section-header h4{margin:0;font-size:11px;color:#D4A574;letter-spacing:1px}
-.btn-add-day{background:#21262D;border:1px solid #30363D;color:#E6EDF3;padding:4px 8px;border-radius:4px;font-size:10px;cursor:pointer;font-weight:700}
-.btn-add-day:hover{border-color:#D4A574;color:#D4A574}
-.days-list{display:flex;flex-direction:column;gap:4px;margin-top:6px}
-.day-item{display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:#161B22;border-radius:4px;font-size:12px;cursor:pointer;border-left:2px solid transparent;gap:8px;flex-shrink:0}
-.day-item:hover{border-left-color:#D4A574}.day-item.active{background:#211E12;border-left-color:#D4A574}
-.day-left{display:flex;align-items:center;gap:6px;min-width:0}
-.day-name{font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.day-count{background:#000;padding:1px 6px;border-radius:10px;font-size:10px;color:#7D8590;flex:0 0 auto}
-.day-right{display:flex;align-items:center;gap:2px;flex:0 0 auto}
-.btn-mini{width:20px;height:20px;background:#21262D;border:1px solid #30363D;color:#7D8590;border-radius:3px;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center}
-.btn-mini:hover{background:#30363D;color:#E6EDF3}
-.btn-mini.del:hover{background:#3a1212;border-color:#7f1d1d;color:#fca5a5}
-.hint{font-size:9px;color:#484F58;margin-top:4px;font-style:italic}
-.asset-buttons{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
-.btn-asset{height:34px;background:#21262D;border:1px solid #30363D;color:#cbd5e1;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.btn-asset:hover{border-color:#8B949E;color:white;background:#30363D}
-.asset-count{font-size:10px;color:#484F58;text-align:center}
-.asset-category{margin-top:4px;flex-shrink:0}
-.category-header{display:flex;gap:6px;align-items:center;padding:6px 8px;background:#161B22;border:1px solid #21262D;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;color:#E6EDF3}
-.count{margin-left:auto;color:#7D8590;font-weight:400}
-.asset-list{display:flex;flex-direction:column;gap:4px;margin-top:6px;max-height:160px;overflow-y:auto;flex-shrink:0}
-.asset-list.av-list{max-height:200px}
-.asset-item{display:flex;align-items:center;gap:6px;background:#161B22;border-radius:4px;padding:4px;flex-shrink:0}
-.asset-item img{width:28px;height:28px;object-fit:cover;border-radius:3px;flex-shrink:0}
-.thumb-placeholder{width:28px;height:28px;background:#21262D;border-radius:3px;flex-shrink:0}
-.audio-item .audio-icon{width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:#21262D;border-radius:3px;font-size:12px;flex-shrink:0}
-.name{flex:1;font-size:10px;font-family:monospace;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.btn-del{width:18px;height:18px;flex:0 0 18px;background:#dc2626;color:white;border:0;border-radius:3px;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;line-height:1}
-.btn-del:hover{background:#ef4444}
-.empty{font-size:11px;color:#484F58;font-style:italic;padding:8px;text-align:center}
-</style>
+
