@@ -3,16 +3,16 @@ import { ref, onMounted, computed } from 'vue'
 import DaysPanel from './DaysPanel.vue'
 import SceneList from './SceneList.vue'
 import SceneCanvas from './SceneCanvas.vue'
-import SceneGraph from './SceneGraph.vue' // <-- 1. IMPORT NOWEGO GRAFU
+import SceneGraph from './SceneGraph.vue'
 import ChoicesEditor from './ChoicesEditor.vue'
 import TopBar from './editor/TopBar.vue'
 import ObiBar from './editor/ObiBar.vue'
 import BuildModal from './editor/BuildModal.vue'
 import HostModal from './editor/HostModal.vue'
+import TutorialModal from './TutorialModal.vue'
+import JanuszModal from './JanuszModal.vue'
 import { useProjectStore } from '../stores/projectStore.js'
 import { OpenProjectFolder, RunGame, BuildGame, BuildExeGame, HostGame, StopHost, GetHostStatus } from '../../wailsjs/go/main/App.js'
-import tutorialBasic from '../assets/tutorial_basic.jpg'
-import JanuszModal from './JanuszModal.vue'
 
 const store = useProjectStore()
 const emit = defineEmits(['go-to-menu'])
@@ -48,7 +48,6 @@ async function toggleHost() {
 onMounted(async()=>{ try{ const [running,port,url]=await GetHostStatus(); if(running){ isHosting.value=true; hostUrl.value=url } }catch{} })
 
 async function runParkiet(e?: MouseEvent) {
-  // Bezpieczne sprawdzenie: jeśli e jest undefined, isBuild dostanie false
   const isBuild = e?.shiftKey || false; 
   if (!store.projectPath) return
   
@@ -78,7 +77,6 @@ async function runParkiet(e?: MouseEvent) {
   }
 }
 
-
 async function buildExe() {
   if(!store.projectPath) return
   try{ isBuildingExe.value=true; buildStep.value='● ZAPISUJĘ PROJEKT...'; buildLog.value=''; await saveProject()
@@ -98,7 +96,6 @@ async function buildExe() {
       <DaysPanel class="panel" />
       <SceneList class="panel" />
       
-      <!-- 2. ZAMIANA POJEDYNCZEGO CANVASU NA KONTENER Z GRAFEM -->
       <div class="central-preview-column">
         <SceneGraph class="panel panel-graph" />
         <SceneCanvas class="panel panel-canvas-fill" />
@@ -115,7 +112,10 @@ async function buildExe() {
     <HostModal v-if="isBuildingHost" :step="hostBuildStep" :log="hostBuildLog" @close="isBuildingHost=false" />
 
     <transition name="toast"><div v-if="showSavedToast" class="toast-saved">✓ Zapisano</div></transition>
-    <div v-if="showTutorial" class="modal-overlay" @click.self="showTutorial=false"><div class="modal-content"><button class="close-btn" @click="showTutorial=false">✕</button><img :src="tutorialBasic" class="tutorial-img"/></div></div>
+
+    <!-- Komponent nowego tutoriala -->
+    <TutorialModal :is-open="showTutorial" @close="showTutorial = false" />
+
     <JanuszModal />
   </div>
 </template>
@@ -131,10 +131,6 @@ body { background:var(--bg); margin:0; color:var(--text); overflow-x:hidden; }
 .editor { height:100vh; display:flex; flex-direction:column; background:var(--bg); }
 .main-grid { display:grid; grid-template-columns:280px 280px minmax(400px,1fr) 380px; gap:12px; padding:12px; flex:1; overflow:hidden; min-height:0; padding-bottom:0; min-width:1376px; }
 
-/* 3. STYLOWANIE DLA ŚRODKOWEJ KOLUMNY */
-/* ==========================================================================
-   3. STYLOWANIE DLA ŚRODKOWEJ KOLUMNY (ZMODYFIKOWANE MACRO)
-   ========================================================================== */
 .central-preview-column {
   display: flex;
   flex-direction: column;
@@ -145,21 +141,20 @@ body { background:var(--bg); margin:0; color:var(--text); overflow-x:hidden; }
 }
 
 .panel-graph {
-  flex: 0 0 340px;      /* Zwiększona przestrzeń dla mapy grafu (z 260px) */
+  flex: 0 0 340px;
   min-height: 0;
-  overflow: hidden;     /* Blokada podwójnego scrolla na kontenerze nadrzędnym */
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
 .panel-canvas-fill {
-  flex: 1;              /* Rozciąga podgląd sceny w pionie na całe pozostałe miejsce */
+  flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
-/* --- LOGIKA ŁADOWANIA, TOASTY I MODALE --- */
 .loading { 
   flex: 1; 
   display: flex; 
@@ -194,47 +189,4 @@ body { background:var(--bg); margin:0; color:var(--text); overflow-x:hidden; }
   opacity: 0; 
   transform: translateX(-50%) translateY(10px); 
 }
-
-.modal-overlay { 
-  position: fixed; 
-  inset: 0; 
-  background: rgba(5, 3, 10, 0.85); 
-  backdrop-filter: blur(8px); 
-  display: flex; 
-  align-items: center; 
-  justify-content: center; 
-  z-index: 9998; 
-}
-
-.modal-content { 
-  background: var(--panel); 
-  border: 1.5px solid var(--border); 
-  border-radius: 8px; 
-  padding: 20px; 
-  max-width: 90vw; 
-  max-height: 90vh; 
-  overflow: auto; 
-  position: relative; 
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6); 
-}
-
-.close-btn { 
-  position: absolute; 
-  top: 10px; 
-  right: 10px; 
-  background: #1a1214; 
-  border: 1.5px solid #2a1a1e; 
-  color: var(--text-dim); 
-  width: 28px; 
-  height: 28px; 
-  border-radius: 4px; 
-  cursor: pointer; 
-}
-
-.tutorial-img { 
-  max-width: 100%; 
-  height: auto; 
-  display: block; 
-}
-
 </style>

@@ -47,3 +47,8 @@ html, body, #app {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--border-hover);
 }
+/* Nadpisanie formatowania podtytułu w krokach */
+[class*="subtitle"], 
+.step-subtitle {
+  text-transform: none !important;
+}
