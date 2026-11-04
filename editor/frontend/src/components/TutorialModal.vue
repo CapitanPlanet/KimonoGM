@@ -2,7 +2,7 @@
   <div v-if="isOpen" class="modal-overlay" @click.self="$emit('close')">
     <div class="tutorial-wrapper">
       <button class="close-btn" @click="$emit('close')">✕</button>
-      
+
       <div class="main-container">
         <!-- Elementy dekoracyjne tła -->
         <div class="decor-blob blob-1"></div>
@@ -31,11 +31,11 @@
             Wystarczy inwencja twórcza i trochę
             <span class="belt pill-dark">CEBULI</span> – bo wszystko jest za darmo.
           </p>
-          
+
           <!-- SEKCJA ZASOBÓW (Zawsze pionowo / wertykalnie) -->
           <div class="zasoby-dodatkowe-panel">
             <div class="zasoby-przyciski">
-              <a href="#ścieżka/do/obrazka.png" target="_blank" class="zasob-link ilustracja-link">
+              <a :href="tutorialImg" target="_blank" class="zasob-link ilustracja-link">
                 NA SZYBKO
               </a>
               <a href="https://www.youtube.com/" target="_blank" class="zasob-link video-link">
@@ -63,14 +63,17 @@
             <div class="step-content">
               <div class="step-header-row">
                 <div class="step-title-group">
-                  <h3 class="font-display step-title"><span class="step-title-num">1.</span>ROZGRZEWKA — DODAJ DZIEŃ</h3>
-                  <div class="step-subtitle">"Najgęstszy las to ten, którego nie ma, a najmądrzejszy samuraj tnie powietrze tam, gdzie wróg jeszcze nie pomyślał, żeby się urodzić" - Kien-shitsu</div>
+                  <h3 class="font-display step-title"><span class="step-title-num">1.</span>ROZGRZEWKA — DODAJ DZIEŃ
+                  </h3>
+                  <div class="step-subtitle">"Najgęstszy las to ten, którego nie ma, a najmądrzejszy samuraj tnie
+                    powietrze tam, gdzie wróg jeszcze nie pomyślał, żeby się urodzić" - Kien-shitsu</div>
                 </div>
                 <div class="step-tag font-display">Rzut na parkiet</div>
               </div>
               <p class="step-text">
                 Każda gra to rundy. <b>Wesele, kac, poprawiny, dogrywka.</b> Klikasz <span class="pill">+ Dzień</span>.
-                Nazwy bez spacji: <span class="code">wesele</span>, <span class="code">prolog</span>, <span class="code">final_ippon</span>.
+                Nazwy bez spacji: <span class="code">wesele</span>, <span class="code">prolog</span>, <span
+                  class="code">final_ippon</span>.
               </p>
             </div>
           </section>
@@ -87,13 +90,18 @@
             <div class="step-content">
               <div class="step-header-row">
                 <div class="step-title-group">
-                  <h3 class="font-display step-title"><span class="step-title-num">2.</span>USTAW MATĘ — DODAJ SCENY</h3>
-                  <div class="step-subtitle">"Jeśli woda w dzbanie myśli, że jest winem, to ty jesteś suszoną śliwką." - Jui Kuen</div>
+                  <h3 class="font-display step-title"><span class="step-title-num">2.</span>USTAW MATĘ — DODAJ SCENY
+                  </h3>
+                  <div class="step-subtitle">"Jeśli woda w dzbanie myśli, że jest winem, to ty jesteś suszoną śliwką." -
+                    Jui Kuen</div>
                 </div>
               </div>
               <p class="step-text">
-                <span class="pill">+ Scena</span> to nowy chwyt. Ustaw <b>TŁO (BG)</b>, <b>TYTUŁ</b>, <b>TEKST</b>. Na końcu
-                rundy zawsze <span class="inline-flex bg-white text-black rounded-full px-2 py-0.5 font-bold text-[11px]">KONIEC DNIA → END</span>. Inaczej zapętlisz się jak DJ na weselu u kuzyna.
+                <span class="pill">+ Scena</span> to nowy chwyt. Ustaw <b>TŁO (BG)</b>, <b>TYTUŁ</b>, <b>TEKST</b>. Na
+                końcu
+                rundy zawsze <span
+                  class="inline-flex bg-white text-black rounded-full px-2 py-0.5 font-bold text-[11px]">KONIEC DNIA →
+                  END</span>. Inaczej zapętlisz się jak DJ na weselu u kuzyna.
               </p>
             </div>
           </section>
@@ -111,7 +119,8 @@
               <div class="step-header-row">
                 <div class="step-title-group">
                   <h3 class="font-display step-title"><span class="step-title-num">3.</span>TECHNIKA — WYBORY</h3>
-                  <div class="step-subtitle">"Karma to bumerang, ale rzucony w ciemnym pokoju przez niewidomego kucharza, który nie lubi kolendry" -  A-nirvâna-chai</div>
+                  <div class="step-subtitle">"Karma to bumerang, ale rzucony w ciemnym pokoju przez niewidomego
+                    kucharza, który nie lubi kolendry" - Kim Ir Sen</div>
                 </div>
                 <div class="step-tag font-display">Ippon na WSTYD1</div>
               </div>
@@ -134,12 +143,15 @@
             <div class="step-content">
               <div class="step-header-row">
                 <div class="step-title-group">
-                  <h3 class="font-display step-title"><span class="step-title-num">4.</span>KONTRA — REAKCJE I STATS</h3>
-                  <div class="step-subtitle">"Człowiek, który nie ma nic do powiedzenia, powinien mówić bardzo głośno, żeby zagłuszyć ciszę, która o nim plotkuje" - Gandhi</div>
+                  <h3 class="font-display step-title"><span class="step-title-num">4.</span>KONTRA — REAKCJE I STATS
+                  </h3>
+                  <div class="step-subtitle">"Człowiek, który nie ma nic do powiedzenia, powinien mówić bardzo głośno,
+                    żeby zagłuszyć ciszę, która o nim plotkuje" - Gandhi</div>
                 </div>
               </div>
               <p class="step-text">
-                Każdy rzut ma <b>Kontrę</b>. Zmieniaj <b>Statystyki jako pasy (KONFIGURUJ GLOBALNIE)</b>: w okienku możesz wpisać nazwę statystyk i przypiąć pod avatara.
+                Każdy rzut ma <b>Kontrę</b>. Zmieniaj <b>Statystyki jako pasy (KONFIGURUJ GLOBALNIE)</b>: w okienku
+                możesz wpisać nazwę statystyk i przypiąć pod avatara.
               </p>
             </div>
           </section>
@@ -157,11 +169,13 @@
               <div class="step-header-row">
                 <div class="step-title-group">
                   <h3 class="font-display step-title"><span class="step-title-num">5.</span>KIMONO Z AI — ASSETY</h3>
-                  <div class="step-subtitle">"Kto patrzy w przepaść zbyt długo, ten w końcu zauważy, że przepaść też ma dość patrzenia na jego krzywe zęby i pójdzie zrobić sobie herbaty" - Shang Tsung</div>
+                  <div class="step-subtitle">"Kto patrzy w przepaść zbyt długo, ten w końcu zauważy, że przepaść też ma
+                    dość patrzenia na jego krzywe zęby i pójdzie zrobić sobie herbaty" - Shang Tsung</div>
                 </div>
               </div>
               <p class="step-text">
-                Nie masz grafika? <b>TŁA (BG), AVATARY w judogach, REAKCJE</b> generuj w AI. Wrzuć <span class="code">.webp</span> przez assety.
+                Nie masz grafika? <b>TŁA (BG), AVATARY w judogach, REAKCJE</b> generuj w AI. Wrzuć <span
+                  class="code">.webp</span> przez assety.
               </p>
             </div>
           </section>
@@ -179,11 +193,14 @@
               <div class="step-header-row">
                 <div class="step-title-group">
                   <h3 class="font-display step-title"><span class="step-title-num">6.</span>MUZYKA I OKRZYK — AUDIO</h3>
-                  <div class="step-subtitle">"Wielki dowódca potrafi zwyciężać sprytnie i podstępnie. Prawdziwe zwycięstwo polega na tak szybkim uciekaniu z pola walki, by przeciwnik pomyślał, że to on ucieka przed tobą, tylko w przeciwnym kierunku" - Budda</div>
+                  <div class="step-subtitle">"Wielki dowódca potrafi zwyciężać sprytnie i podstępnie. Prawdziwe
+                    zwycięstwo polega na tak szybkim uciekaniu z pola walki, by przeciwnik pomyślał, że to on ucieka
+                    przed tobą, tylko w przeciwnym kierunku" - Budda</div>
                 </div>
               </div>
               <p class="step-text">
-                Wgraj <b>MUZYKĘ</b> (disco polo może być, ale uważaj na prawa autorskie), <b>SFX</b> rzut na matę, brzdęk cekinów, przekleństwa - obojętnie.
+                Wgraj <b>MUZYKĘ</b> (disco polo może być, ale uważaj na prawa autorskie), <b>SFX</b> rzut na matę,
+                brzdęk cekinów, przekleństwa - obojętnie.
               </p>
             </div>
           </section>
@@ -191,7 +208,8 @@
           <!-- Krok 7 -->
           <section class="step-card">
             <aside class="step-aside">
-              <div class="step-number-circle font-display" style="background: var(--white); color: #000; border: 2px solid var(--black);">
+              <div class="step-number-circle font-display"
+                style="background: var(--white); color: #000; border: 2px solid var(--black);">
                 07
                 <span class="step-kanji font-display">オナ</span>
               </div>
@@ -201,11 +219,15 @@
               <div class="step-header-row">
                 <div class="step-title-group">
                   <h3 class="font-display step-title"><span class="step-title-num">7.</span>IPPON! — PUBLIKUJ</h3>
-                  <div class="step-subtitle">"Gdy miecze już zardzewieją od leżenia w trawie, a kurz po bitwie opadnie ci na oczy, usiądź na głazie i udawaj, że jesteś pierogiem. Albowiem tylko ten, kto potrafi leżeć nieruchomo i pachnieć maślaną cebulką, osiąga prawdziwy pokój z samym sobą." - Generał ZZZXXZX (czy jakoś tak)</div>
+                  <div class="step-subtitle">"Gdy miecze już zardzewieją od leżenia w trawie, a kurz po bitwie opadnie
+                    ci na oczy, usiądź na głazie i udawaj, że jesteś pierogiem. Albowiem tylko ten, kto potrafi leżeć
+                    nieruchomo i pachnieć maślaną cebulką, osiąga prawdziwy pokój z samym sobą." - Generał ZZZXXZX (czy
+                    jakoś tak)</div>
                 </div>
               </div>
               <p class="step-text">
-                Klikasz <span class="pill-dark pill">ZAPISZ</span>, potem <span class="pill">WEB-BUILD</span> lub <span class="pill">EXE</span>. Zero kodu. Czysty ippon.
+                Klikasz <span class="pill-dark pill">ZAPISZ</span>, potem <span class="pill">WEB-BUILD</span> lub <span
+                  class="pill">EXE</span>. Zero kodu. Czysty ippon.
               </p>
             </div>
           </section>
@@ -223,7 +245,8 @@
               NIE TRZEBA KODOWAĆ.<br>
               WYSTARCZY INWENCJA<br>
               I DOBRY RZUT.<br>
-              <span class="inline-block mt-2 bg-black text-[#F5D67B] rounded-full px-4 py-1 text-[26px] -rotate-1">NO PAIN, NO KIEŁBASA.</span>
+              <span class="inline-block mt-2 bg-black text-[#F5D67B] rounded-full px-4 py-1 text-[26px] -rotate-1">NO
+                PAIN, NO KIEŁBASA.</span>
             </h2>
             <div class="cta-details">
               <div class="tag-editor">KIMONO editor • DISCO DOJO</div>
@@ -244,11 +267,18 @@
 </template>
 
 <script>
+import tutorialImg from '../assets/tutorial_basic.jpg'
+
 export default {
   props: {
     isOpen: {
       type: Boolean,
       required: true
+    }
+  },
+  data() {
+    return {
+      tutorialImg
     }
   }
 }
@@ -270,7 +300,7 @@ export default {
   --black: #000000;
   --brand-gradient: linear-gradient(135deg, var(--gold), var(--magenta));
   --belt-gradient: linear-gradient(90deg, var(--white) 0%, var(--gold) 50%, var(--white) 100%);
-  
+
   position: relative;
   width: 100%;
   max-width: 880px;
@@ -296,6 +326,14 @@ export default {
   padding: 40px 20px;
 }
 
+.tutorial-img {
+  width: 100%;
+  max-width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 15px;
+}
+
 .tutorial-wrapper {
   position: relative;
   max-width: 880px;
@@ -308,7 +346,7 @@ export default {
   right: 20px;
   background: #1a1724;
   color: white;
-  border: 1px solid rgba(255,255,255,0.15);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 50%;
   width: 36px;
   height: 36px;
@@ -319,10 +357,13 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
 }
 
-.font-display { font-family: 'Syne', sans-serif; font-weight: 800; }
+.font-display {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+}
 
 .pill {
   display: inline-flex;
@@ -337,9 +378,31 @@ export default {
   margin: 0 2px;
 }
 
-.pill-dark { background: var(--black); color: var(--gold); }
-.code { display: inline-block; background: var(--black); border: 1px solid rgba(255, 255, 255, 0.1); padding: 1px 6px; font-size: 11px; color: var(--cyan); border-radius: 9999px; font-family: monospace; }
-.belt { display: inline-block; background: var(--gold); color: var(--black); padding: 0 8px; border-radius: 9999px; font-weight: 700; font-size: 11px; }
+.pill-dark {
+  background: var(--black);
+  color: var(--gold);
+}
+
+.code {
+  display: inline-block;
+  background: var(--black);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 1px 6px;
+  font-size: 11px;
+  color: var(--cyan);
+  border-radius: 9999px;
+  font-family: monospace;
+}
+
+.belt {
+  display: inline-block;
+  background: var(--gold);
+  color: var(--black);
+  padding: 0 8px;
+  border-radius: 9999px;
+  font-weight: 700;
+  font-size: 11px;
+}
 
 .decor-blob {
   position: absolute;
@@ -348,14 +411,69 @@ export default {
   pointer-events: none;
   opacity: 0.15;
 }
-.blob-1 { top: -10%; left: -10%; width: 60%; height: 60%; background: var(--purple); }
-.blob-2 { top: 10%; right: -10%; width: 50%; height: 50%; background: var(--gold); }
 
-.header { position: relative; padding: 50px 50px 30px; z-index: 1; }
-.top-badges { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
-.disco-ball-placeholder { width: 70px; height: 70px; background: #15131d; border: 1px solid rgba(255,255,255,0.08); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; box-shadow: 0 0 15px rgba(0, 0, 0, 0.5); }
-.badge-cyber { display: inline-flex; align-items: center; gap: 8px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); padding: 4px 12px; border-radius: 9999px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.2em; color: rgba(255, 255, 255, 0.5); }
-.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); }
+.blob-1 {
+  top: -10%;
+  left: -10%;
+  width: 60%;
+  height: 60%;
+  background: var(--purple);
+}
+
+.blob-2 {
+  top: 10%;
+  right: -10%;
+  width: 50%;
+  height: 50%;
+  background: var(--gold);
+}
+
+.header {
+  position: relative;
+  padding: 50px 50px 30px;
+  z-index: 1;
+}
+
+.top-badges {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.disco-ball-placeholder {
+  width: 70px;
+  height: 70px;
+  background: #15131d;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+}
+
+.badge-cyber {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+}
 
 .title-block {
   margin-bottom: 15px;
@@ -397,13 +515,13 @@ export default {
 .judo-badge {
   background: #1a1724;
   color: var(--gold);
-  border: 1px solid rgba(212,181,99,0.2);
+  border: 1px solid rgba(212, 181, 99, 0.2);
   font-size: 11px;
   font-weight: 800;
   padding: 2px 8px;
   border-radius: 9999px;
   transform: rotate(3deg);
-  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
 }
 
 .no-code-tag {
@@ -414,67 +532,265 @@ export default {
   margin-top: 6px;
 }
 
-.description { font-size: 15px; color: var(--text-muted); max-width: 600px; margin-top: 15px; }
+.description {
+  font-size: 15px;
+  color: var(--text-muted);
+  max-width: 600px;
+  margin-top: 15px;
+}
 
 /* SEKCJA ZASOBÓW - Sztywno wertykalnie (jeden pod drugim) */
-.zasoby-dodatkowe-panel { 
-  background-color: rgba(0,0,0,0.25); 
-  border: 1px solid rgba(255,255,255,0.06); 
-  border-radius: 12px; 
-  padding: 15px; 
-  margin-top: 20px; 
-  max-width: 380px; 
+.zasoby-dodatkowe-panel {
+  background-color: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 15px;
+  margin-top: 20px;
+  max-width: 380px;
 }
-.zasoby-przyciski { 
-  display: flex; 
-  flex-direction: column; /* Wertykalnie */
-  gap: 8px; 
+
+.zasoby-przyciski {
+  display: flex;
+  flex-direction: column;
+  /* Wertykalnie */
+  gap: 8px;
 }
-.zasob-link { 
-  display: flex; 
-  align-items: center; 
-  text-decoration: none; 
-  background-color: rgba(255,255,255,0.04); 
-  color: #fff; 
-  padding: 8px 14px; 
-  border-radius: 6px; 
-  font-size: 12px; 
-  font-weight: 600; 
-  transition: background-color 0.2s; 
-  border: 1px solid rgba(255,255,255,0.08); 
+
+.zasob-link {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  background-color: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background-color 0.2s;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
-.zasob-link:hover { background-color: rgba(255,255,255,0.08); }
-.video-link:hover { border-color: #d32f2f; }
-.ilustracja-link:hover { border-color: #1976d2; }
 
-.steps-container { padding: 0 30px 40px; display: flex; flex-direction: column; gap: 16px; position: relative; z-index: 1; }
-.step-card { background: rgba(255, 255, 255, 0.015); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 20px; display: flex; overflow: hidden; transition: all 0.2s ease; }
-.step-card:hover { background: rgba(255, 255, 255, 0.03); border-color: rgba(255, 255, 255, 0.1); }
+.zasob-link:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
 
-.step-aside { width: 75px; flex-shrink: 0; background: rgba(0, 0, 0, 0.2); border-right: 1px solid rgba(255, 255, 255, 0.03); display: flex; flex-direction: column; align-items: center; padding: 20px 0; }
-.step-number-circle { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; position: relative; }
-.step-kanji { position: absolute; bottom: -4px; right: -4px; background: #0b0a12; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; font-size: 7px; color: rgba(255, 255, 255, 0.5); }
-.step-icon-wrap { margin-top: 15px; width: 28px; height: 28px; border-radius: 50%; background: rgba(255, 255, 255, 0.03); display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.video-link:hover {
+  border-color: #d32f2f;
+}
 
-.step-content { flex: 1; padding: 20px 25px; }
-.step-header-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 4px; }
-.step-title-group { display: flex; flex-direction: column; gap: 2px; } /* Podpis blisko tytułu */
-.step-title { font-size: 16px; font-weight: 800; color: var(--white); margin-bottom: 0px; }
-.step-title-num { opacity: 0.3; margin-right: 5px; font-weight: 600; }
-.step-subtitle { font-size: 10px; letter-spacing: 0.15em; color: rgba(255, 255, 255, 0.4); text-transform: uppercase; margin-bottom: 10px;}
+.ilustracja-link:hover {
+  border-color: #1976d2;
+}
 
-.step-tag { background: rgba(255,255,255,0.06); color: var(--white); font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 9999px; white-space: nowrap; }
-.step-text { font-size: 13px; color: rgba(245, 241, 234, 0.65); margin-top: 8px; line-height: 1.5; }
+.steps-container {
+  padding: 0 30px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+  z-index: 1;
+}
 
-.footer-cta { position: relative; margin-top: 20px; }
-.master-belt { position: absolute; top: 0; left: 0; width: 100%; height: 14px; display: flex; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5); z-index: 2; }
-.belt-white-side { flex: 1; background: var(--belt-gradient); }
-.belt-red-side { flex: 1; background: linear-gradient(90deg, #b71c1c, #8e0000); }
+.step-card {
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  display: flex;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
 
-.cta-content { background: linear-gradient(135deg, #12101a, #0b0a12); border-top: 1px solid rgba(255,255,255,0.08); color: var(--text-main); padding: 40px 40px 30px; border-radius: 0 0 40px 40px; position: relative; z-index: 1; margin-top: 7px; }
-.cta-title { font-size: 26px; line-height: 1.1; letter-spacing: -0.01em; color: var(--white); }
-.cta-details { display: flex; align-items: center; gap: 15px; margin-top: 25px; flex-wrap: wrap; }
-.tag-editor { background: var(--black); color: var(--gold); border: 1px solid rgba(212,181,99,0.2); padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: 700; }
-.cta-text-small { font-size: 11px; color: rgba(255, 255, 255, 0.4); max-width: 45ch; }
-.bottom-bar { background: var(--black); color: rgba(255, 255, 255, 0.25); font-size: 9px; padding: 10px 30px; letter-spacing: 0.18em; text-transform: uppercase; display: flex; justify-content: space-between; border-top: 1px solid rgba(255, 255, 255, 0.05); }
+.step-card:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.step-aside {
+  width: 75px;
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.2);
+  border-right: 1px solid rgba(255, 255, 255, 0.03);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0;
+}
+
+.step-number-circle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  position: relative;
+}
+
+.step-kanji {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  background: #0b0a12;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.step-icon-wrap {
+  margin-top: 15px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.step-content {
+  flex: 1;
+  padding: 20px 25px;
+}
+
+.step-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.step-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Podpis blisko tytułu */
+.step-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--white);
+  margin-bottom: 0px;
+}
+
+.step-title-num {
+  opacity: 0.3;
+  margin-right: 5px;
+  font-weight: 600;
+}
+
+.step-subtitle {
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.step-tag {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--white);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
+.step-text {
+  font-size: 13px;
+  color: rgba(245, 241, 234, 0.65);
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+.footer-cta {
+  position: relative;
+  margin-top: 20px;
+}
+
+.master-belt {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 14px;
+  display: flex;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  z-index: 2;
+}
+
+.belt-white-side {
+  flex: 1;
+  background: var(--belt-gradient);
+}
+
+.belt-red-side {
+  flex: 1;
+  background: linear-gradient(90deg, #b71c1c, #8e0000);
+}
+
+.cta-content {
+  background: linear-gradient(135deg, #12101a, #0b0a12);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+  padding: 40px 40px 30px;
+  border-radius: 0 0 40px 40px;
+  position: relative;
+  z-index: 1;
+  margin-top: 7px;
+}
+
+.cta-title {
+  font-size: 26px;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--white);
+}
+
+.cta-details {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-top: 25px;
+  flex-wrap: wrap;
+}
+
+.tag-editor {
+  background: var(--black);
+  color: var(--gold);
+  border: 1px solid rgba(212, 181, 99, 0.2);
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cta-text-small {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  max-width: 45ch;
+}
+
+.bottom-bar {
+  background: var(--black);
+  color: rgba(255, 255, 255, 0.25);
+  font-size: 9px;
+  padding: 10px 30px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
 </style>
