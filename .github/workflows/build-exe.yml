@@ -9,6 +9,9 @@ on:
       - '.github/workflows/build-exe.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -34,6 +37,13 @@ jobs:
         run: |
           cd editor
           wails build -clean
+
+      - name: Upload EXE as Artifact (backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: KimonoGM-windows
+          path: editor/build/bin/KimonoGM.exe
+          if-no-files-found: error
 
       - name: Upload to GitHub Releases
         uses: softprops/action-gh-release@v2
