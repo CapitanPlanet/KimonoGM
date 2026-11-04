@@ -8,6 +8,44 @@ const zoom = ref(1)
 const hideShortcuts = ref(true)
 const wiggly = ref(true)
 
+// --- PANNING / PRZECIĄGANIE RĄCZKĄ ---
+const canvasRef = ref<HTMLElement | null>(null)
+const isDragging = ref(false)
+let startX = 0
+let startY = 0
+let scrollLeft = 0
+let scrollTop = 0
+
+function startDrag(e: MouseEvent) {
+  // Nie przeciągaj, jeśli kliknięto bezpośrednio w węzeł (node) lub przyciski narzędziowe
+  if ((e.target as HTMLElement).closest('.node') || (e.target as HTMLElement).closest('.g-tools')) return
+  
+  isDragging.value = true
+  startX = e.pageX
+  startY = e.pageY
+  if (canvasRef.value) {
+    scrollLeft = canvasRef.value.scrollLeft
+    scrollTop = canvasRef.value.scrollTop
+  }
+  window.addEventListener('mousemove', onDrag)
+  window.addEventListener('mouseup', stopDrag)
+}
+
+function onDrag(e: MouseEvent) {
+  if (!isDragging.value || !canvasRef.value) return
+  const dx = e.pageX - startX
+  const dy = e.pageY - startY
+  canvasRef.value.scrollLeft = scrollLeft - dx
+  canvasRef.value.scrollTop = scrollTop - dy
+}
+
+function stopDrag() {
+  isDragging.value = false
+  window.removeEventListener('mousemove', onDrag)
+  window.removeEventListener('mouseup', stopDrag)
+}
+// -------------------------------------
+
 const scenes = computed(() => store.currentDayScenes || [])
 const currentId = computed(() => store.currentSceneId)
 const startId = computed(() => (store as any).meta?.startScene || 'start')
@@ -95,7 +133,6 @@ function getOffsets(fromId:string, toId:string){
   const ins = groupedEdges.value.filter(e=>e.to===toId).sort((a,b)=>a.from.localeCompare(b.from))
   const outIdx = outs.findIndex(e=>e.to===toId)
   const inIdx = ins.findIndex(e=>e.from===fromId)
-  // MAX rozproszenie - każda linia z innej wysokości
   const outOff = outs.length>1 ? (outIdx - (outs.length-1)/2) * 16 : 0
   const inOff = ins.length>1 ? (inIdx - (ins.length-1)/2) * 16 : 0
   return { outOff, inOff, outIdx }
@@ -105,7 +142,6 @@ function getPath(fromId:string, toId:string){
   const a = getPos(fromId)
   const b = getPos(toId)
   const { outOff, inOff, outIdx } = getOffsets(fromId, toId)
-  // Wyjście z różnych wysokości noda - to naprawia Twoje zielone strzałki które się zlewały
   const x1 = a.x + 105
   const y1 = a.y + 19 + outOff
   const x2 = b.x
@@ -158,7 +194,13 @@ function select(id:string){ store.selectScene(id) }
       </div>
       <span class="g-toggle">{{ isCollapsed ? 'ZWIN' : 'ROZWIN' }}</span>
     </div>
-    <div v-if="!isCollapsed" class="graph-canvas">
+    <div 
+      v-if="!isCollapsed" 
+      ref="canvasRef" 
+      class="graph-canvas" 
+      :class="{ dragging: isDragging }" 
+      @mousedown="startDrag"
+    >
       <div class="graph-inner" :style="{ width: getBounds().w + 'px', height: getBounds().h + 'px', transform: 'scale(' + zoom + ')', transformOrigin: '0 0' }">
         <div class="grid-bg"></div>
         <svg class="edges-layer" :width="getBounds().w" :height="getBounds().h">
@@ -197,7 +239,8 @@ function select(id:string){ store.selectScene(id) }
 .zbtn{ width:16px; height:16px; background:#21262D; border:1px solid #30363D; color:#E6EDF3; border-radius:3px; cursor:pointer; font-size:10px; display:grid; place-items:center; }
 .zval{ font-family:'JetBrains Mono',monospace; font-size:7px; color:#7D8590; min-width:24px; text-align:center; }
 .g-toggle{ font-family:'JetBrains Mono',monospace; font-size:8px; color:#7D8590; margin-left:4px; }
-.graph-canvas{ position:relative; height:180px; overflow:auto; background:#080A0F; }
+.graph-canvas{ position:relative; height:180px; overflow:auto; background:#080A0F; cursor:grab; user-select:none; }
+.graph-canvas.dragging{ cursor:grabbing; }
 .graph-canvas::-webkit-scrollbar{ width:5px; height:5px; } .graph-canvas::-webkit-scrollbar-thumb{ background:#21262D; border-radius:3px; }
 .graph-inner{ position:relative; transition: transform 0.15s; padding-left:4px; }
 .grid-bg{ position:absolute; inset:0; background-image: radial-gradient(#21262D 1px, transparent 1px); background-size:16px 16px; opacity:0.12; pointer-events:none; }
