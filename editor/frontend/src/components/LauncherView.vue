@@ -1,4 +1,5 @@
 <template>
+  <TutorialModal :isOpen="showTutorialModal" @close="showTutorialModal = false" />
   <InfoModal 
     :isOpen="showModal" 
     storageKey="launcher_info_seen" 
@@ -23,7 +24,7 @@
     <div class="bottom-bar">
       <button class="kimono-btn" @click="handleNew">[ NEW DOJO ]</button>
       <button class="kimono-btn" @click="handleOpen">[ OPEN PROJECT ]</button>
-      <button class="kimono-btn ghost" disabled>[ BUILD ]</button>
+      <button class="kimono-btn" @click="showTutorialModal = true">[ TUTORIAL ]</button>
     </div>
     <div class="version">v2.86 - 1986 EDITION | ŁÓDŹ PL</div>
     <div v-if="err" class="error-box">{{ err }}</div>
@@ -35,10 +36,13 @@ import { ref, onMounted } from 'vue'
 import bgImage from '../assets/bg.jpg'
 import { useProjectStore } from '../stores/projectStore'
 import InfoModal from '../components/InfoModal.vue'
+import TutorialModal from '../components/TutorialModal.vue'
 
 export default {
   components: {
-    InfoModal
+    InfoModal,
+    TutorialModal,
+    
   },
   setup() {
     const projectStore = useProjectStore()
@@ -46,9 +50,11 @@ export default {
     const selectedPath = ref('')
     const err = ref('')
     const showModal = ref(true)
-
+    const showTutorialModal = ref(false)
     function getApp() { return window.go?.main?.App }
 
+
+    
     function mapProjects(raw) {
       return raw.map((r) => {
         if (typeof r === 'string') { 
@@ -142,10 +148,12 @@ export default {
       selectedPath,
       err,
       showModal,
+      showTutorialModal,
       handleNew,
       handleOpen,
       openRecent,
-      donate
+      donate,
+      
     }
   }
 }
