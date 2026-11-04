@@ -38,7 +38,7 @@ jobs:
             - name: Build Wails App (.exe)
         run: |
           cd editor
-          wails build -clean
+          wails build -clean -windowsgui
 
             - name: Upload EXE as Artifact (backup)
         uses: actions/upload-artifact@v5
