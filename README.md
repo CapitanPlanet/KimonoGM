@@ -1,7 +1,7 @@
 # KIMONO GM — janusz-maker / editor 1.0
-**Windows:** [KimonoGM.exe](https://github.com/CapitanPlanet/KimonoGM/releases/download/v1.3-obi-dark-manieczki/KimonoGM.exe)
-**Przeglądarka (bez instalacji)** [Graj na itch.io](https://xsepergmailcom.itch.io/kimonogm-test)
-**Screenshot** https://zapodaj.net/plik-oM4aF7TjWO
+**Windows:** [KimonoGM.exe](https://github.com/CapitanPlanet/KimonoGM/releases/latest/download/KimonoGM.exe)
+**Przeglądarka (bez instalacji) (ale jeszcze nie działa ok ;/ chwilę trzeba poczekać)** [Graj na itch.io](https://xsepergmailcom.itch.io/kimonogm-test)
+**Screenshot** https://zapodaj.net/plik-xixskdYBEa
 
 > **NO PAIN NO KIEŁBASA — RAN FOR JUR LAJF — FAJT KLUB MANIECKI**
 
