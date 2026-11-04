@@ -35,9 +35,9 @@
           <!-- SEKCJA ZASOBÓW (Zawsze pionowo / wertykalnie) -->
           <div class="zasoby-dodatkowe-panel">
             <div class="zasoby-przyciski">
-              <a :href="tutorialImg" target="_blank" class="zasob-link ilustracja-link">
-                NA SZYBKO
-              </a>
+              <button @click="lightboxOpen = true" class="zasob-link ilustracja-link">
+                NA SZYBKO - ZOBACZ ILUSTRACJĘ
+              </button>
               <a href="https://www.youtube.com/" target="_blank" class="zasob-link video-link">
                 Instrukcja 1 (YT)
               </a>
@@ -264,6 +264,13 @@
       </div>
     </div>
   </div>
+
+  <!-- LIGHTBOX jak na FB - duży obrazek na cały ekran -->
+  <div v-if="lightboxOpen" class="lightbox-overlay" @click.self="lightboxOpen = false">
+    <button class="lightbox-close" @click="lightboxOpen = false">✕</button>
+    <img :src="tutorialImg" class="lightbox-img" alt="Tutorial - ilustracja" @click.stop />
+    <div class="lightbox-hint">Kliknij poza obrazek albo ✕ żeby zamknąć</div>
+  </div>
 </template>
 
 <script>
@@ -278,7 +285,8 @@ export default {
   },
   data() {
     return {
-      tutorialImg
+      tutorialImg,
+      lightboxOpen: false
     }
   }
 }
@@ -792,5 +800,71 @@ export default {
   display: flex;
   justify-content: space-between;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* LIGHTBOX */
+.ilustracja-link {
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+}
+
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 40px;
+  cursor: zoom-out;
+  animation: lightboxFade 0.2s ease;
+}
+
+@keyframes lightboxFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.lightbox-img {
+  max-width: 92vw;
+  max-height: 88vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 20px 80px rgba(0, 0, 0, 0.8);
+  cursor: default;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  font-size: 20px;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.lightbox-hint {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  white-space: nowrap;
 }
 </style>
