@@ -266,10 +266,10 @@
   </div>
 
   <!-- LIGHTBOX jak na FB - duży obrazek na cały ekran -->
-  <div v-if="lightboxOpen" class="lightbox-overlay" @click.self="lightboxOpen = false">
-    <button class="lightbox-close" @click="lightboxOpen = false">✕</button>
-    <img :src="tutorialImg" class="lightbox-img" alt="Tutorial - ilustracja" @click.stop />
-    <div class="lightbox-hint">Kliknij poza obrazek albo ✕ żeby zamknąć</div>
+  <div v-if="lightboxOpen" ref="lightboxOverlay" class="lightbox-overlay" :class="{ 'lightbox-overlay--zoomed': lightboxZoomed, 'lightbox-overlay--dragging': isDragging }" @click.self="closeLightbox" @mousedown="startDrag" @mousemove="onDrag" @mouseup="endDrag" @mouseleave="endDrag">
+    <button class="lightbox-close" @click="closeLightbox">✕</button>
+    <img :src="tutorialImg" class="lightbox-img" :class="{ 'lightbox-img--zoomed': lightboxZoomed }" :style="{ transformOrigin: zoomOrigin }" alt="Tutorial - ilustracja" @click.stop="toggleZoom($event)" @dragstart.prevent :title="lightboxZoomed ? 'Kliknij żeby oddalić, przeciągnij żeby przesunąć' : 'Kliknij żeby powiększyć'" />
+    <div class="lightbox-hint">Esc / klik poza obrazek = zamknij &nbsp;•&nbsp; Klik w obrazek = zoom &nbsp;•&nbsp; Przeciągnij = przesuwanie</div>
   </div>
 </template>
 
@@ -286,8 +286,75 @@ export default {
   data() {
     return {
       tutorialImg,
-      lightboxOpen: false
+      lightboxOpen: false,
+      lightboxZoomed: false,
+      zoomOrigin: '50% 50%',
+      isDragging: false,
+      dragStartX: 0,
+      dragStartY: 0,
+      dragScrollLeft: 0,
+      dragScrollTop: 0,
+      dragged: false
     }
+  },
+  watch: {
+    lightboxOpen(open) {
+      if (open) {
+        window.addEventListener('keydown', this.onLightboxKey)
+      } else {
+        window.removeEventListener('keydown', this.onLightboxKey)
+      }
+    }
+  },
+  methods: {
+    closeLightbox() {
+      this.lightboxOpen = false
+      this.lightboxZoomed = false
+      this.zoomOrigin = '50% 50%'
+    },
+    toggleZoom(e) {
+      if (this.dragged) { this.dragged = false; return }
+      if (!this.lightboxZoomed) {
+        // zoom DOKLADNIE w miejsce klikniecia
+        const rect = e.target.getBoundingClientRect()
+        const x = ((e.clientX - rect.left) / rect.width) * 100
+        const y = ((e.clientY - rect.top) / rect.height) * 100
+        this.zoomOrigin = x.toFixed(1) + '% ' + y.toFixed(1) + '%'
+        this.lightboxZoomed = true
+      } else {
+        this.lightboxZoomed = false
+      }
+    },
+    startDrag(e) {
+      if (!this.lightboxZoomed) return
+      const el = this.$refs.lightboxOverlay
+      if (!el) return
+      this.isDragging = true
+      this.dragged = false
+      this.dragStartX = e.clientX
+      this.dragStartY = e.clientY
+      this.dragScrollLeft = el.scrollLeft
+      this.dragScrollTop = el.scrollTop
+    },
+    onDrag(e) {
+      if (!this.isDragging) return
+      const el = this.$refs.lightboxOverlay
+      if (!el) return
+      const dx = e.clientX - this.dragStartX
+      const dy = e.clientY - this.dragStartY
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) this.dragged = true
+      el.scrollLeft = this.dragScrollLeft - dx
+      el.scrollTop = this.dragScrollTop - dy
+    },
+    endDrag() {
+      this.isDragging = false
+    },
+    onLightboxKey(e) {
+      if (e.key === 'Escape') this.closeLightbox()
+    }
+  },
+  beforeUnmount() {
+    window.removeEventListener('keydown', this.onLightboxKey)
   }
 }
 </script>
@@ -828,7 +895,28 @@ export default {
   to { opacity: 1; }
 }
 
+.lightbox-overlay--zoomed {
+  overflow: auto;
+  align-items: flex-start;
+  justify-content: flex-start;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.lightbox-overlay--dragging {
+  cursor: grabbing;
+}
+
+.lightbox-overlay--zoomed .lightbox-img {
+  margin: auto;
+  /* zeby dało sie zescrollowac do kazdej krawedzi */
+  max-width: none;
+}
+
 .lightbox-img {
+  transition: transform 0.2s ease;
+  cursor: zoom-in;
   max-width: 92vw;
   max-height: 88vh;
   width: auto;
@@ -837,6 +925,15 @@ export default {
   border-radius: 12px;
   box-shadow: 0 20px 80px rgba(0, 0, 0, 0.8);
   cursor: default;
+}
+
+.lightbox-img--zoomed {
+  max-width: none;
+  max-height: none;
+  width: auto;
+  height: auto;
+  transform: scale(2.2);
+  cursor: zoom-out;
 }
 
 .lightbox-close {
