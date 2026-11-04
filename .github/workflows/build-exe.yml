@@ -3,54 +3,56 @@ name: Build and Release Windows EXE
 on:
   push:
     branches:
-      - main
-    paths:
-      - 'editor/**'
-      - '.github/workflows/build-exe.yml'
+            - main
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: build-windows-main
+  cancel-in-progress: false
 
 jobs:
   build-windows:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+            - name: Checkout code
+        uses: actions/checkout@v5
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+            - name: Set up Go
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.22'
+          go-version: '1.24'
+          cache-dependency-path: editor/go.sum
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+            - name: Set up Node.js
+        uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '22'
 
-      - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+            - name: Install Wails CLI
+        run: go install 【entity-github¦canonical_name=GitHub】.com/wailsapp/wails/v2/cmd/wails@latest
 
-      - name: Build Wails App (.exe)
+            - name: Build Wails App (.exe)
         run: |
           cd editor
           wails build -clean
 
-      - name: Upload EXE as Artifact (backup)
-        uses: actions/upload-artifact@v4
+            - name: Upload EXE as Artifact (backup)
+        uses: actions/upload-artifact@v5
         with:
           name: KimonoGM-windows
           path: editor/build/bin/KimonoGM.exe
           if-no-files-found: error
 
-      - name: Upload to GitHub Releases
+            - name: Upload to 【entity-GitHub¦canonical_name=GitHub】 Releases
         uses: softprops/action-gh-release@v2
         with:
           files: editor/build/bin/KimonoGM.exe
           tag_name: v1.0.${{ github.run_number }}
-          name: "KimonoGM Editor v1.0.${{ github.run_number }}"
+          name: "KimonoGM Editor v1.0.${{ 【entity-github¦canonical_name=GitHub】.run_number }}"
           body: "Automatyczny build desktopowego edytora prosto z gałęzi main! 🥋🔥"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
