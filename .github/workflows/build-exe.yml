@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'editor/**'
-      - '.github/workflows/build-exe.yml'
   workflow_dispatch:
 
 permissions:
@@ -18,17 +15,17 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.22'
+          go-version: '1.26'
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
@@ -36,10 +33,10 @@ jobs:
       - name: Build Wails App (.exe)
         run: |
           cd editor
-          wails build -clean
+          wails build -clean -ldflags "-H=windowsgui"
 
       - name: Upload EXE as Artifact (backup)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: KimonoGM-windows
           path: editor/build/bin/KimonoGM.exe
@@ -51,6 +48,6 @@ jobs:
           files: editor/build/bin/KimonoGM.exe
           tag_name: v1.0.${{ github.run_number }}
           name: "KimonoGM Editor v1.0.${{ github.run_number }}"
-          body: "Automatyczny build desktopowego edytora prosto z gałęzi main! 🥋🔥"
+          body: "Automatyczny build desktopowego edytora prosto z gałęzi main!"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
