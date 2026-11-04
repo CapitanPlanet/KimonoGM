@@ -247,7 +247,7 @@ watch(() => store.ui.showAvatarEditor, async (open) => {
         <div class="label">PROJEKT</div>
         <div class="project-name" :title="store.meta?.gameName?? ''">{{ store.meta?.gameName?? '...' }}</div>
         <button @click="store.ui.showAvatarEditor = true" class="btn-janusz">
-          <span class="icon">🧠</span>
+          <span class="icon">🪩</span>
           <span class="text">
             <b>KONFIGURUJ GLOBALNIE</b>
             <small>{{ avatarRulesCount }} zasad/y • {{ avatarCount }} avatar/y</small>

@@ -1,4 +1,11 @@
 <template>
+  <TutorialModal :isOpen="showTutorialModal" @close="showTutorialModal = false" />
+  <InfoModal 
+    :isOpen="showModal" 
+    storageKey="launcher_info_seen" 
+    message="Siemasz Sensei! Po prawej masz listę projektów. Na dole nowy projekt i otworzenie istniejącego - tworzysz gdzie chcesz, otwierasz co chcesz. Projekty mają własną stukturę (możesz edytować ręcznie jeśli jesteś odważny). Za tym masz prosty i szybki tutorial. No i tyle... dobrej zabawy i porąbanych pomysłów! Salamalejkum czy jaktam to się mówi po Chińsku..."
+    @close="showModal = false" 
+  />
   <div class="kimono-launcher">
     <img :src="bgImage" class="bg-image" alt="" />
     <div class="top-right-beer">
@@ -17,75 +24,139 @@
     <div class="bottom-bar">
       <button class="kimono-btn" @click="handleNew">[ NEW DOJO ]</button>
       <button class="kimono-btn" @click="handleOpen">[ OPEN PROJECT ]</button>
-      <button class="kimono-btn ghost" disabled>[ BUILD ]</button>
+      <button class="kimono-btn" @click="showTutorialModal = true">[ TUTORIAL ]</button>
     </div>
     <div class="version">v2.86 - 1986 EDITION | ŁÓDŹ PL</div>
     <div v-if="err" class="error-box">{{ err }}</div>
   </div>
 </template>
 
-<script setup lang="ts">
+<script>
 import { ref, onMounted } from 'vue'
 import bgImage from '../assets/bg.jpg'
 import { useProjectStore } from '../stores/projectStore'
-const projectStore = useProjectStore()
-const displayProjects = ref<any[]>([])
-const selectedPath = ref('')
-const err = ref('')
-function getApp(): any { return (window as any).go?.main?.App }
-function mapProjects(raw:any[]){
-  return raw.map((r:any)=>{
-    if(typeof r === 'string'){ const n=r.split(/[\\/]/).pop()!.toUpperCase(); return { path:r, name:n.slice(0,28), date:'1996-04-12', size:'12.4 MB' } }
-    const path=r.path||r.Path||''; const name=(r.name||path.split(/[\\/]/).pop()||path).toString().replace('.janproj','').toUpperCase()
-    return { path, name:name.slice(0,28), date:(r.lastOpened||r.date||'1996-04-12').toString().slice(0,10), size:'12.4 MB' }
-  })
-}
-async function handleNew(){
-  const App = getApp()
-  err.value=''
-  try{
-    // NOWY UX: 1 prompt, bez Explorera
-    let defaultPath = 'C:\\Users\\MD-Core\\KimonoGM\\games'
-    try{
-      if(App?.GetDefaultProjectPath){
-        defaultPath = await App.GetDefaultProjectPath()
-      }
-    }catch{}
-    // 1. Nazwa projektu
-    const projectName = prompt(`Nazwa nowego dojo:\n(Zostanie utworzone w ${defaultPath})`, 'Moja Gra')
-    if(!projectName || projectName.trim()==='') return
+import InfoModal from '../components/InfoModal.vue'
+import TutorialModal from '../components/TutorialModal.vue'
 
-    const cleanName = projectName.trim().replace(/[\\\/:*?"<>|]/g, '_')
-    const fullPath = defaultPath.replace(/\\/g,'/').replace(/\/$/,'') + '/' + cleanName
+export default {
+  components: {
+    InfoModal,
+    TutorialModal,
     
-    // 2. Twórz od razu, bez wyboru folderu
-    console.log('Creating project at:', fullPath)
-    await projectStore.createProjectAtPath(fullPath, cleanName)
-    console.log('Created:', projectStore.projectPath)
+  },
+  setup() {
+    const projectStore = useProjectStore()
+    const displayProjects = ref([])
+    const selectedPath = ref('')
+    const err = ref('')
+    const showModal = ref(true)
+    const showTutorialModal = ref(false)
+    function getApp() { return window.go?.main?.App }
+
+
     
-  }catch(e:any){
-    err.value='NEW ERR: '+e.message
-    console.error(e)
-    // Fallback: jeśli zawiedzie (np. brak uprawnień), dopiero wtedy pokaż Explorer jako opcję wyboru innego miejsca
-    const App2 = getApp()
-    if(confirm('Nie udało się utworzyć w domyślnym folderze. Chcesz wybrać inną lokalizację?')){
-      try{
-        const parent = await App2.SelectFolder()
-        if(!parent) return
-        const name = prompt('Nazwa projektu:', 'Moja gra')
-        if(!name) return
-        const fp = parent.replace(/\\/g,'/') + '/' + name.trim()
-        await projectStore.createProjectAtPath(fp, name.trim())
-      }catch(e2:any){ err.value='NEW ERR2: '+e2.message }
+    function mapProjects(raw) {
+      return raw.map((r) => {
+        if (typeof r === 'string') { 
+          const n = r.split(/[\\/]/).pop().toUpperCase()
+          return { path: r, name: n.slice(0, 28), date: '1996-04-12', size: '12.4 MB' } 
+        }
+        const path = r.path || r.Path || ''
+        const name = (r.name || path.split(/[\\/]/).pop() || path).toString().replace('.janproj', '').toUpperCase()
+        return { path, name: name.slice(0, 28), date: (r.lastOpened || r.date || '1996-04-12').toString().slice(0, 10), size: '12.4 MB' }
+      })
+    }
+
+    async function handleNew() {
+      const App = getApp()
+      err.value = ''
+      try {
+        let defaultPath = 'C:\\Users\\MD-Core\\KimonoGM\\games'
+        try {
+          if (App?.GetDefaultProjectPath) {
+            defaultPath = await App.GetDefaultProjectPath()
+          }
+        } catch {}
+        
+        const projectName = prompt(`Nazwa nowego dojo:\n(Zostanie utworzone w ${defaultPath})`, 'Moja Gra')
+        if (!projectName || projectName.trim() === '') return
+
+        const cleanName = projectName.trim().replace(/[\\\/:*?"<>|]/g, '_')
+        const fullPath = defaultPath.replace(/\\/g, '/').replace(/\/$/, '') + '/' + cleanName
+        
+        await projectStore.createProjectAtPath(fullPath, cleanName)
+      } catch (e) {
+        err.value = 'NEW ERR: ' + e.message
+        console.error(e)
+        const App2 = getApp()
+        if (confirm('Nie udało się utworzyć w domyślnym folderze. Chcesz wybrać inną lokalizację?')) {
+          try {
+            const parent = await App2.SelectFolder()
+            if (!parent) return
+            const name = prompt('Nazwa projektu:', 'Moja gra')
+            if (!name) return
+            const fp = parent.replace(/\\/g, '/') + '/' + name.trim()
+            await projectStore.createProjectAtPath(fp, name.trim())
+          } catch (e2) { err.value = 'NEW ERR2: ' + e2.message }
+        }
+      }
+    }
+
+    async function handleOpen() {
+      const App = getApp()
+      try { 
+        const f = App?.SelectFolder ? await App.SelectFolder() : null
+        if (!f) return
+        await projectStore.loadProjectFromPath(f.replace(/\\/g, '/'))
+        if (App?.AddRecentProject) await App.AddRecentProject(f) 
+      } catch (e) { err.value = 'OPEN ERR: ' + e.message }
+    }
+
+    async function openRecent(p) { 
+      selectedPath.value = p
+      try { 
+        await projectStore.loadProjectFromPath(p.replace(/\\/g, '/')) 
+      } catch (e) { err.value = 'RECENT ERR: ' + e.message } 
+    }
+
+    function donate() { 
+      const rt = window.runtime
+      if (rt?.BrowserOpenURL) rt.BrowserOpenURL('https://buycoffee.to/')
+      else window.open('https://buycoffee.to/', '_blank') 
+    }
+
+    onMounted(async () => { 
+      let t = 0
+      const it = setInterval(async () => { 
+        const a = getApp()
+        if (a || t > 20) {
+          clearInterval(it)
+          if (a?.GetRecentProjects) {
+            try {
+              const r = await a.GetRecentProjects()
+              if (r?.length > 0) displayProjects.value = mapProjects(r)
+            } catch {}
+          }
+        } 
+        t++ 
+      }, 300) 
+    })
+
+    return {
+      bgImage,
+      displayProjects,
+      selectedPath,
+      err,
+      showModal,
+      showTutorialModal,
+      handleNew,
+      handleOpen,
+      openRecent,
+      donate,
+      
     }
   }
 }
-async function handleOpen(){
-  const App=getApp(); try{ const f=App?.SelectFolder?await App.SelectFolder():null; if(!f) return; await projectStore.loadProjectFromPath(f.replace(/\\/g,'/')); if(App?.AddRecentProject) await App.AddRecentProject(f) }catch(e:any){ err.value='OPEN ERR: '+e.message }
-}
-async function openRecent(p:string){ selectedPath.value=p; try{ await projectStore.loadProjectFromPath(p.replace(/\\/g,'/')) }catch(e:any){ err.value='RECENT ERR: '+e.message } }
-function donate(){ const rt=(window as any).runtime; if(rt?.BrowserOpenURL) rt.BrowserOpenURL('https://buycoffee.to/'); else window.open('https://buycoffee.to/','_blank') }
-onMounted(async()=>{ const App=getApp(); let t=0; const it=setInterval(async()=>{ const a=getApp(); if(a||t>20){clearInterval(it); if(a?.GetRecentProjects){try{const r=await a.GetRecentProjects(); if(r?.length>0) displayProjects.value=mapProjects(r)}catch{}}} t++},300) })
 </script>
 
 <style scoped>
