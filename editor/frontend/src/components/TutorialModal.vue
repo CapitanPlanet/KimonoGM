@@ -193,9 +193,7 @@
               <div class="step-header-row">
                 <div class="step-title-group">
                   <h3 class="font-display step-title"><span class="step-title-num">6.</span>MUZYKA I OKRZYK — AUDIO</h3>
-                  <div class="step-subtitle">"Wielki dowódca potrafi zwyciężać sprytnie i podstępnie. Prawdziwe
-                    zwycięstwo polega na tak szybkim uciekaniu z pola walki, by przeciwnik pomyślał, że to on ucieka
-                    przed tobą, tylko w przeciwnym kierunku" - Budda</div>
+                  <div class="step-subtitle">"Stare, Chińskie przysłowie mówi: jeśli nie wiesz co powiedzieć to powiedz stare Chińskie przysłowie" - Nieznany Chiński mędrzec</div>
                 </div>
               </div>
               <p class="step-text">
