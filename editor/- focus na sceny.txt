@@ -1,0 +1,11 @@
+- w readme zrobić ładny header
+- nie buduje się u innych
+- focus na sceny
+- dni nie daje się dodawać
+- rozszerzenie grafu - płynne - graf znika
+- scena się przepina na koniec dnia
+- sceny w grafie asynciem
+- nie ma tła na scenie
+- lepiej tła zapisywać, 1024x1024 przycina
+- muzyka na początu sceny
+- sprawdź sfx
