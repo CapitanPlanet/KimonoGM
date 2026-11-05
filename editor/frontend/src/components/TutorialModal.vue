@@ -219,9 +219,7 @@
               <div class="step-header-row">
                 <div class="step-title-group">
                   <h3 class="font-display step-title"><span class="step-title-num">7.</span>IPPON! — PUBLIKUJ</h3>
-                  <div class="step-subtitle">"Gdy miecze już zardzewieją od leżenia w trawie, a kurz po bitwie opadnie
-                    ci na oczy, usiądź na głazie i udawaj, że jesteś pierogiem. Albowiem tylko ten, kto potrafi leżeć
-                    nieruchomo i pachnieć maślaną cebulką, osiąga prawdziwy pokój z samym sobą." - Generał ZZZXXZX (czy
+                  <div class="step-subtitle">"Lepiej wypić sake z przyjacielem niż wodę z kałuży z wrogiem" - Generał ZZZXXZX (czy
                     jakoś tak)</div>
                 </div>
               </div>
