@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -27,6 +28,7 @@ func (a *App) BuildGame(projectPath string) (string, error) {
 	cmd.Dir = engineRoot
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	if err := cmd.Run(); err != nil {
 		return "", err
 	}
@@ -90,13 +92,14 @@ func (a *App) BuildExeGame(projectPath string) (string, error) {
 		})
 	}
 
-_ = a.StopGame() // bezpieczne
+	_ = a.StopGame() // bezpieczne
 	time.Sleep(500 * time.Millisecond)
 
 	cmd := exec.Command("dotnet", "publish", "-c", "Release", "-o", distRoot, "-p:StaticWebAssetsCompressContent=false", "-p:StaticWebAssetCompressionMode=None", "-p:PublishTrimmed=false", "-p:BlazorWebAssemblyEnableTrimming=false")
 	cmd.Dir = engineRoot
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("publish failed: %w", err)
 	}
@@ -183,7 +186,6 @@ _ = a.StopGame() // bezpieczne
 		}
 	}
 
-	// FIX v5: csproj MUSI zawierac Content Include dla wwwroot.zip i icon.ico
 	csprojContent := `<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -253,9 +255,7 @@ class Program {
             Path.Combine(Directory.GetCurrentDirectory(), "wwwroot.zip"),
             Path.Combine(Path.GetTempPath(), "KimonoGM", "wwwroot.zip"),
         };
-        // w single file mode AppContext.BaseDirectory to temp .net folder
         foreach (var p in candidates) if (File.Exists(p)) return p;
-        // szukaj rekurencyjnie w baseDir
         try {
             foreach (var f in Directory.GetFiles(AppContext.BaseDirectory, "wwwroot.zip", SearchOption.AllDirectories)) {
                 if (File.Exists(f)) return f;
@@ -273,7 +273,6 @@ class Program {
         var tempRoot = Path.Combine(Path.GetTempPath(), "KimonoGM", exeName);
         var wwwroot = Path.Combine(tempRoot, "wwwroot");
 
-        // znajdz zip
         var wwwrootZip = FindWwwrootZip();
 
         try {
@@ -293,7 +292,7 @@ class Program {
                 }
             }
         } catch (Exception ex) {
-            MessageBox.Show("Blad wypakowania wwwroot.zip: " + ex.Message + "\nZip: " + wwwrootZip + "\nTemp: " + tempRoot);
+            MessageBox.Show("Blad wypakowania wwwroot.zip: " + ex.Message);
         }
 
         if (!File.Exists(Path.Combine(wwwroot, "index.html"))) {
@@ -308,7 +307,7 @@ class Program {
         }
 
         if (!File.Exists(Path.Combine(wwwroot, "index.html"))) {
-            MessageBox.Show("Brak wwwroot/index.html\nSzukano w:\n" + wwwroot + "\nZip: " + (wwwrootZip ?? "nie znaleziono") + "\nBaseDir: " + AppContext.BaseDirectory + "\nExeDir: " + Path.GetDirectoryName(Application.ExecutablePath));
+            MessageBox.Show("Brak wwwroot/index.html");
             return;
         }
 
@@ -343,7 +342,7 @@ class Program {
                         resp.OutputStream.Write(bytes, 0, bytes.Length);
                     } else {
                         resp.StatusCode = 404;
-                        var notFound = System.Text.Encoding.UTF8.GetBytes("404 Not Found: " + urlPath);
+                        var notFound = System.Text.Encoding.UTF8.GetBytes("404 Not Found");
                         resp.ContentLength64 = notFound.Length;
                         resp.OutputStream.Write(notFound, 0, notFound.Length);
                     }
@@ -378,7 +377,6 @@ class Program {
 }`
 	_ = os.WriteFile(filepath.Join(launcherDir, "Program.cs"), []byte(programCs), 0644)
 
-	// Przygotuj wwwroot.zip dla Launchera - MUSI istniec przed publish
 	srcWwwroot := filepath.Join(distRoot, "wwwroot")
 	zipPath := filepath.Join(launcherDir, "wwwroot.zip")
 	_ = os.Remove(zipPath)
@@ -406,10 +404,12 @@ class Program {
 	tmpOut := filepath.Join(os.TempDir(), "kimono_launcher_publish")
 	os.RemoveAll(tmpOut)
 
-	c := exec.Command("dotnet", "publish", launcherProj, "-c", "Release", "-r", "win-x64", "--self-contained", "true", "-p:PublishSingleFile=true", "-p:IncludeNativeLibrariesForSelfExtract=true", "-p:IncludeAllContentForSelfExtract=true", "-o", tmpOut)
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-	if err := c.Run(); err != nil {
+	// Użycie poprawnej zmiennej cmd z flagą ukrywającą okno
+	cmd = exec.Command("dotnet", "publish", launcherProj, "-c", "Release", "-r", "win-x64", "--self-contained", "true", "-p:PublishSingleFile=true", "-p:IncludeNativeLibrariesForSelfExtract=true", "-p:IncludeAllContentForSelfExtract=true", "-o", tmpOut)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("launcher publish failed: %w", err)
 	}
 
@@ -430,16 +430,11 @@ class Program {
 		return "", fmt.Errorf("nie znaleziono Launcher.exe w %s", tmpOut)
 	}
 
-	// Sprawdz czy wwwroot.zip jest w tmpOut - jesli nie, skopiuj recznie i zbuduj exe z embedded zip via /resource?
-	// Dla pewnosci skopiujemy zip obok finalnego exe jako fallback i dodamy go jako embedded resource do exe przez dotnet publish
-	// Ale teraz publish juz ma wwwroot.zip jako Content, wiec powinien byc w tmpOut
-
 	b, _ := os.ReadFile(exePath)
 	if err := os.WriteFile(finalExe, b, 0644); err != nil {
 		return "", err
 	}
 
-	// Posprzataj stary syf
 	_ = os.RemoveAll(filepath.Join(downloads, "wwwroot"))
 	if files, err := os.ReadDir(downloads); err == nil {
 		for _, f := range files {
@@ -515,6 +510,7 @@ func (a *App) BuildPublicPack(projectPath string) (string, error) {
 	cmd.Dir = engineRoot
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("dotnet publish failed: %w", err)
 	}
