@@ -1,5 +1,5 @@
 - w readme zrobić ładny header - DONE
-- nie buduje się u innych - 
+- nie buduje się u innych - IN PROGRESS
 - focus na sceny
 - dni nie daje się dodawać
 - rozszerzenie grafu - płynne - graf znika

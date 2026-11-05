@@ -151,7 +151,7 @@ func (a *App) BuildExeGame(projectPath string) (string, error) {
 			})
 		}
 
-		// Tworzenie launchera i pakowanie w exe (Twój dotychczasowy stabilny kod)
+		// Tworzenie launchera i pakowanie w exe
 		launcherCandidates := []string{
 			filepath.Join(filepath.Dir(engineRoot), "Launcher", "Launcher.csproj"),
 			filepath.Join(engineRoot, "Launcher", "Launcher.csproj"),
@@ -432,19 +432,80 @@ class Program {
 			return "", fmt.Errorf("nie znaleziono Launcher.exe w %s", tmpOut)
 		}
 
+		// Automatycznie zapisujemy ten wygenerowany launcher jako engine_template.exe
+		templateDest := filepath.Join(filepath.Dir(engineRoot), "engine_template.exe")
+		_ = copyFile(exePath, templateDest)
+
 		b, _ := os.ReadFile(exePath)
 		if err := os.WriteFile(finalExe, b, 0644); err != nil {
 			return "", err
 		}
 	} else {
 		// FALLBACK DLA ZNAJOMEGO (Gdy nie ma folderu engine na dysku, np. u użytkownika edytora):
-		// Sprawdzamy czy w folderze aplikacji znajduje się gotowy szablon bazy (np. engine_template.exe lub bazowy launcher)
 		execDir, _ := os.Executable()
 		templateExe := filepath.Join(filepath.Dir(execDir), "engine_template.exe")
 		if _, err := os.Stat(templateExe); err == nil {
 			if err := copyFile(templateExe, finalExe); err != nil {
 				return "", fmt.Errorf("nie udało się skopiować szablonu gry: %w", err)
 			}
+			
+			// Budujemy zip z danymi projektu również u użytkownika (z folderu Data)
+			srcData := filepath.Join(a.projectPath, "Data")
+			if _, err := os.Stat(srcData); os.IsNotExist(err) {
+				srcData = a.projectPath
+			}
+			tmpWwwroot := filepath.Join(os.TempDir(), "kimono_user_wwwroot")
+			os.RemoveAll(tmpWwwroot)
+			os.MkdirAll(filepath.Join(tmpWwwroot, "data"), 0755)
+			
+			filepath.Walk(srcData, func(p string, info fs.FileInfo, err error) error {
+				if err != nil || info.IsDir() { return nil }
+				if strings.HasSuffix(strings.ToLower(info.Name()), ".json") {
+					b, _ := os.ReadFile(p)
+					os.WriteFile(filepath.Join(tmpWwwroot, "data", info.Name()), b, 0644)
+				}
+				return nil
+			})
+			if _, err := os.Stat(filepath.Join(a.projectPath, "project.janproj")); err == nil {
+				b, _ := os.ReadFile(filepath.Join(a.projectPath, "project.janproj"))
+				os.WriteFile(filepath.Join(tmpWwwroot, "data", "project.janproj"), b, 0644)
+				os.WriteFile(filepath.Join(tmpWwwroot, "project.janproj"), b, 0644)
+			}
+			
+			// Kopiujemy też obrazki
+			srcImages := filepath.Join(a.projectPath, "images")
+			if _, err := os.Stat(srcImages); err == nil {
+				dstImages := filepath.Join(tmpWwwroot, "images")
+				os.MkdirAll(dstImages, 0755)
+				filepath.Walk(srcImages, func(p string, info fs.FileInfo, err error) error {
+					if err != nil || info.IsDir() { return nil }
+					b, _ := os.ReadFile(p)
+					os.WriteFile(filepath.Join(dstImages, info.Name()), b, 0644)
+					return nil
+				})
+			}
+
+			userZipPath := filepath.Join(filepath.Dir(finalExe), "wwwroot.zip")
+			_ = os.Remove(userZipPath)
+			zf, err := os.Create(userZipPath)
+			if err == nil {
+				zw := zip.NewWriter(zf)
+				filepath.Walk(tmpWwwroot, func(p string, info fs.FileInfo, err error) error {
+					if err != nil || info.IsDir() { return nil }
+					rel, _ := filepath.Rel(tmpWwwroot, p)
+					f, _ := zw.Create(filepath.ToSlash(rel))
+					src, _ := os.Open(p)
+					if src != nil {
+						io.Copy(f, src)
+						src.Close()
+					}
+					return nil
+				})
+				zw.Close()
+				zf.Close()
+			}
+			os.RemoveAll(tmpWwwroot)
+
 		} else {
 			return "", fmt.Errorf("BŁĄD: Brak środowiska deweloperskiego silnika oraz szablonu gry. Uruchom edytor z pakietem zasobów.")
 		}
