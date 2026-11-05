@@ -38,9 +38,7 @@ class Program {
             Path.Combine(Directory.GetCurrentDirectory(), "wwwroot.zip"),
             Path.Combine(Path.GetTempPath(), "KimonoGM", "wwwroot.zip"),
         };
-        // w single file mode AppContext.BaseDirectory to temp .net folder
         foreach (var p in candidates) if (File.Exists(p)) return p;
-        // szukaj rekurencyjnie w baseDir
         try {
             foreach (var f in Directory.GetFiles(AppContext.BaseDirectory, "wwwroot.zip", SearchOption.AllDirectories)) {
                 if (File.Exists(f)) return f;
@@ -58,7 +56,6 @@ class Program {
         var tempRoot = Path.Combine(Path.GetTempPath(), "KimonoGM", exeName);
         var wwwroot = Path.Combine(tempRoot, "wwwroot");
 
-        // znajdz zip
         var wwwrootZip = FindWwwrootZip();
 
         try {
@@ -78,7 +75,7 @@ class Program {
                 }
             }
         } catch (Exception ex) {
-            MessageBox.Show("Blad wypakowania wwwroot.zip: " + ex.Message + "\nZip: " + wwwrootZip + "\nTemp: " + tempRoot);
+            MessageBox.Show("Blad wypakowania wwwroot.zip: " + ex.Message);
         }
 
         if (!File.Exists(Path.Combine(wwwroot, "index.html"))) {
@@ -93,7 +90,7 @@ class Program {
         }
 
         if (!File.Exists(Path.Combine(wwwroot, "index.html"))) {
-            MessageBox.Show("Brak wwwroot/index.html\nSzukano w:\n" + wwwroot + "\nZip: " + (wwwrootZip ?? "nie znaleziono") + "\nBaseDir: " + AppContext.BaseDirectory + "\nExeDir: " + Path.GetDirectoryName(Application.ExecutablePath));
+            MessageBox.Show("Brak wwwroot/index.html");
             return;
         }
 
@@ -128,7 +125,7 @@ class Program {
                         resp.OutputStream.Write(bytes, 0, bytes.Length);
                     } else {
                         resp.StatusCode = 404;
-                        var notFound = System.Text.Encoding.UTF8.GetBytes("404 Not Found: " + urlPath);
+                        var notFound = System.Text.Encoding.UTF8.GetBytes("404 Not Found");
                         resp.ContentLength64 = notFound.Length;
                         resp.OutputStream.Write(notFound, 0, notFound.Length);
                     }
