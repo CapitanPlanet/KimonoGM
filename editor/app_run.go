@@ -7,12 +7,17 @@ import (
         "os/exec"
         "path/filepath"
         "strings"
+        "syscall"
         "time"
 
         "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-
+// Pomocnicza funkcja ukrywająca okno CMD na Windowsie
+func hideWindow(cmd *exec.Cmd) *exec.Cmd {
+        cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+        return cmd
+}
 
 func (a *App) RunGame(projectPath string) error {
         if projectPath == "" {
@@ -24,9 +29,9 @@ func (a *App) RunGame(projectPath string) error {
         a.projectPath = filepath.Clean(projectPath)
 
         // 1. KILL
-        exec.Command("taskkill", "/F", "/IM", "MakerEngine.exe").Run()
-        exec.Command("taskkill", "/F", "/IM", "dotnet.exe").Run()
-        exec.Command("cmd", "/C", "for /f \"tokens=5\" %a in ('netstat -aon ^| findstr :5020') do taskkill /F /PID %a").Run()
+        hideWindow(exec.Command("taskkill", "/F", "/IM", "MakerEngine.exe")).Run()
+        hideWindow(exec.Command("taskkill", "/F", "/IM", "dotnet.exe")).Run()
+        hideWindow(exec.Command("cmd", "/C", "for /f \"tokens=5\" %a in ('netstat -aon ^| findstr :5020') do taskkill /F /PID %a")).Run()
         time.Sleep(500 * time.Millisecond)
 
         // 2. FIND ENGINE
@@ -185,7 +190,7 @@ func (a *App) RunGame(projectPath string) error {
 
         // 4a. RESTORE
         runtime.LogInfo(a.ctx, "[PARKIET] dotnet restore...")
-        restoreCmd := exec.Command("dotnet", "restore", enginePath, "--nologo")
+        restoreCmd := hideWindow(exec.Command("dotnet", "restore", enginePath, "--nologo"))
         restoreCmd.Dir = engineRoot
         _ = restoreCmd.Run()
 
@@ -204,7 +209,7 @@ func (a *App) RunGame(projectPath string) error {
         buildLogPath := filepath.Join(os.TempDir(), "kimonogm_build.log")
         buildLog, _ := os.Create(buildLogPath)
         buildArgs := []string{"build", enginePath, "-c", "Debug", "--no-restore", "--nologo"}
-        buildCmd := exec.Command("dotnet", buildArgs...)
+        buildCmd := hideWindow(exec.Command("dotnet", buildArgs...))
         buildCmd.Dir = engineRoot
         if buildLog != nil {
                 buildCmd.Stdout = buildLog
@@ -222,7 +227,7 @@ func (a *App) RunGame(projectPath string) error {
                 runtime.LogInfo(a.ctx, "[PARKIET] Build z SWA fail, probuje bez SWA...")
                 buildLog2, _ := os.Create(buildLogPath)
                 buildArgs2 := []string{"build", enginePath, "-c", "Debug", "--no-restore", "--nologo", "-p:StaticWebAssetsEnabled=false"}
-                buildCmd2 := exec.Command("dotnet", buildArgs2...)
+                buildCmd2 := hideWindow(exec.Command("dotnet", buildArgs2...))
                 buildCmd2.Dir = engineRoot
                 if buildLog2 != nil {
                         buildCmd2.Stdout = buildLog2
@@ -307,16 +312,15 @@ func (a *App) RunGame(projectPath string) error {
         }
 
         // 7. RUN --no-build
-        exec.Command("cmd", "/C", "for /f \"tokens=5\" %a in ('netstat -aon ^| findstr :5020') do taskkill /F /PID %a").Run()
+        hideWindow(exec.Command("cmd", "/C", "for /f \"tokens=5\" %a in ('netstat -aon ^| findstr :5020') do taskkill /F /PID %a")).Run()
         time.Sleep(500 * time.Millisecond)
         for i := 0; i < 10; i++ {
-                out, _ := exec.Command("cmd", "/C", "netstat -aon | findstr :5020").CombinedOutput()
+                out, _ := hideWindow(exec.Command("cmd", "/C", "netstat -aon | findstr :5020")).CombinedOutput()
                 if len(out) == 0 {
                         break
                 }
                 time.Sleep(500 * time.Millisecond)
         }
-
 
         copyData()
 
@@ -325,7 +329,7 @@ func (a *App) RunGame(projectPath string) error {
         prop := fmt.Sprintf("-p:GameAssetsRoot=\"%s\"", strings.ReplaceAll(gp, "\"", ""))
         
         // Uruchamiamy proces w bezpiecznym trybie bez kompilacji, bez dotykania flag StaticWebAssets
-        runCmd := exec.Command("dotnet", "run", "--no-build", "--project", enginePath, prop, "--urls", "http://localhost:5020", "--no-launch-profile")
+        runCmd := hideWindow(exec.Command("dotnet", "run", "--no-build", "--project", enginePath, prop, "--urls", "http://localhost:5020", "--no-launch-profile"))
 
         runCmd.Dir = engineRoot
         runLogPath := filepath.Join(os.TempDir(), "kimonogm_run.log")
@@ -341,6 +345,3 @@ func (a *App) RunGame(projectPath string) error {
         runtime.LogInfo(a.ctx, "[PARKIET] Uruchomiono na http://localhost:5020")
         return nil
 }
-
-
-
