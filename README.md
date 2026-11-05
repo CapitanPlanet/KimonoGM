@@ -1,15 +1,21 @@
-# KIMONO GM — janusz-maker / editor 1.0
-**Windows:** [KimonoGM.exe](https://github.com/CapitanPlanet/KimonoGM/releases/latest/download/KimonoGM.exe)
-**Przeglądarka (bez instalacji) (ale jeszcze nie działa ok ;/ chwilę trzeba poczekać)** [Graj na itch.io](https://xsepergmailcom.itch.io/kimonogm-test)
+# KIMONO GM — janusz-maker / editor 1.0  
+
+**Windows:** [KimonoGM.exe](https://github.com/CapitanPlanet/KimonoGM/releases/latest/download/KimonoGM.exe)  
+  
+
+**Przeglądarka (bez instalacji) (ale jeszcze nie działa ok ;/ chwilę trzeba poczekać)** [Graj na itch.io](https://xsepergmailcom.itch.io/kimonogm-test)  
+  
+
 **Screenshot** https://zapodaj.net/plik-xixskdYBEa
 
 > **NO PAIN NO KIEŁBASA — RAN FOR JUR LAJF — FAJT KLUB MANIECKI**
 
-**Non-profitowy edytor do robienia absurdalnych visual noveli dla znajomych.** 
+**Non-profitowy edytor do robienia absurdalnych visual noveli dla znajomych.**   
+
 Twórz co chcesz i jak chcesz (Na własną odpowiedzialność)
-
-
-
+  
+  
+  
 Nie jestem korpo. Jestem Janusz... Znaczy Michał jestem. Ale z połączonych żywiołów: Tanie piwo, głupie pomysły, zj!@#e życiowe, Łódź Bałuty, iiii coś tam jeszcze. POWSTAJE JA, KAPITAN MICHAŁ!!!! 
 
 ---
