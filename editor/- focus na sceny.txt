@@ -1,5 +1,5 @@
-- w readme zrobić ładny header
-- nie buduje się u innych
+- w readme zrobić ładny header - DONE
+- nie buduje się u innych - 
 - focus na sceny
 - dni nie daje się dodawać
 - rozszerzenie grafu - płynne - graf znika
@@ -9,3 +9,4 @@
 - lepiej tła zapisywać, 1024x1024 przycina
 - muzyka na początu sceny
 - sprawdź sfx
+- tła w podglądzie są za małe
