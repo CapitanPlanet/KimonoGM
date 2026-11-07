@@ -18,23 +18,9 @@ func (a *App) CreateProject(basePath string, name string) error {
 
 	imagesDir := filepath.Join(basePath, "images")
 
-	// Bezpieczne namierzanie assetów źródłowych (działa w dev oraz w skompilowanym EXE)
+	// 1. Próbujemy skopiować z fizycznego folderu na dysku (tryb deweloperski)
 	srcAssets := "frontend/src/assets"
-	if _, err := os.Stat(srcAssets); os.IsNotExist(err) {
-		if exe, err := os.Executable(); err == nil {
-			candidate := filepath.Join(filepath.Dir(exe), "..", "..", "frontend", "src", "assets")
-			if _, err := os.Stat(candidate); err == nil {
-				srcAssets = candidate
-			} else {
-				candidate2 := filepath.Join(filepath.Dir(exe), "..", "frontend", "src", "assets")
-				if _, err := os.Stat(candidate2); err == nil {
-					srcAssets = candidate2
-				}
-			}
-		}
-	}
-
-	// Kopiujemy prawdziwe aktywa ze ścieżki deweloperskiej
+	copiedFromDisk := false
 	if _, err := os.Stat(srcAssets); err == nil {
 		_ = filepath.Walk(srcAssets, func(p string, info fs.FileInfo, err error) error {
 			if err != nil || info.IsDir() {
@@ -44,14 +30,47 @@ func (a *App) CreateProject(basePath string, name string) error {
 			if !(strings.HasSuffix(low, ".webp") || strings.HasSuffix(low, ".png") || strings.HasSuffix(low, ".jpg") || strings.HasSuffix(low, ".jpeg")) {
 				return nil
 			}
-			dst := filepath.Join(basePath, "images", info.Name())
+			dst := filepath.Join(imagesDir, info.Name())
 			if _, err := os.Stat(dst); os.IsNotExist(err) {
 				if b, err := os.ReadFile(p); err == nil {
-					_ = os.WriteFile(dst, b, 0644)
+					if os.WriteFile(dst, b, 0644) == nil {
+						copiedFromDisk = true
+					}
 				}
 			}
 			return nil
 		})
+	}
+
+	// 2. Jeśli nie było folderu na dysku (np. czysty Sandbox / skompilowany EXE), wyciągamy zembedowane assety!
+	if !copiedFromDisk {
+		if entries, err := fs.ReadDir(embeddedAssets, "frontend/src/assets"); err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					continue
+				}
+				name := entry.Name()
+				low := strings.ToLower(name)
+				if strings.HasSuffix(low, ".webp") || strings.HasSuffix(low, ".png") || strings.HasSuffix(low, ".jpg") || strings.HasSuffix(low, ".jpeg") {
+					dst := filepath.Join(imagesDir, name)
+					if _, err := os.Stat(dst); os.IsNotExist(err) {
+						if b, err := embeddedAssets.ReadFile("frontend/src/assets/" + name); err == nil {
+							_ = os.WriteFile(dst, b, 0644)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Awaryjny bezpiecznik gdyby w embedach też zabrakło tła
+	tutorialBgPath := filepath.Join(imagesDir, "bg_tutorial.webp")
+	if info, err := os.Stat(tutorialBgPath); os.IsNotExist(err) || info.Size() < 100 {
+		_ = os.WriteFile(tutorialBgPath, placeholderPNG, 0644)
+	}
+	tutorialAvPath := filepath.Join(imagesDir, "av_tutorial.webp")
+	if info, err := os.Stat(tutorialAvPath); os.IsNotExist(err) || info.Size() < 100 {
+		_ = os.WriteFile(tutorialAvPath, placeholderPNG, 0644)
 	}
 
 	// Inteligentne wykrywanie domyślnego tła i awatara

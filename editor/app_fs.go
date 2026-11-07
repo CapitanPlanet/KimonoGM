@@ -60,32 +60,53 @@ func (a *App) safeJoin(elems ...string) (string, error) {
 }
 
 func (a *App) findEngineRoot() (string, string) {
-	cwd, _ := os.Getwd()
-	exe, _ := os.Executable()
-	exeDir := filepath.Dir(exe)
+	// Inteligentna funkcja: wspina się w górę katalogów w poszukiwaniu silnika
+	checkDir := func(startDir string) (string, string) {
+		current := startDir
+		for i := 0; i < 8; i++ { // sprawdź do 8 poziomów w górę
+			engineCandidate := filepath.Join(current, "engine")
+			if _, err := os.Stat(filepath.Join(engineCandidate, "MakerEngine.csproj")); err == nil {
+				return engineCandidate, filepath.Join(filepath.Dir(engineCandidate), "dist")
+			}
+			if _, err := os.Stat(filepath.Join(current, "MakerEngine.csproj")); err == nil {
+				if filepath.Base(current) == "engine" {
+					return current, filepath.Join(filepath.Dir(current), "dist")
+				}
+			}
+			parent := filepath.Dir(current)
+			if parent == current {
+				break
+			}
+			current = parent
+		}
+		return "", ""
+	}
 
+	// 1. Szukaj w górę od pliku wykonywalnego (.exe)
+	if exe, err := os.Executable(); err == nil {
+		if abs, dist := checkDir(filepath.Dir(exe)); abs != "" {
+			return abs, dist
+		}
+	}
+
+	// 2. Szukaj w górę od bieżącego katalogu roboczego (CWD)
+	if cwd, err := os.Getwd(); err == nil {
+		if abs, dist := checkDir(cwd); abs != "" {
+			return abs, dist
+		}
+	}
+
+	// 3. Awaryjne ścieżki stałe na wypadek sandboksa
 	candidates := []string{
-		filepath.Join(exeDir, "..", "..", "..", "engine"),
-		filepath.Join(exeDir, "..", "..", "engine"),
-		filepath.Join(exeDir, "..", "engine"),
-		filepath.Join(exeDir, "engine"),
-		filepath.Join(filepath.Dir(filepath.Dir(cwd)), "engine"),
-		filepath.Join(cwd, "..", "..", "engine"),
 		`C:\Users\MD-Core\KimonoGM\engine`,
-		filepath.Join(cwd, "..", "engine"),
-		"engine",
-		filepath.Join(filepath.Dir(cwd), "engine"),
+		`C:\KimonoGM\engine`,
+	}
+	for _, c := range candidates {
+		if _, err := os.Stat(filepath.Join(c, "MakerEngine.csproj")); err == nil {
+			return c, filepath.Join(filepath.Dir(c), "dist")
+		}
 	}
 
-	for _, c := range candidates {
-		abs, err := filepath.Abs(c)
-		if err != nil {
-			continue
-		}
-		if _, err := os.Stat(filepath.Join(abs, "MakerEngine.csproj")); err == nil {
-			return abs, filepath.Join(filepath.Dir(abs), "dist")
-		}
-	}
 	return "", ""
 }
 

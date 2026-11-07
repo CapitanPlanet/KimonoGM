@@ -12,10 +12,22 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-var placeholderPNG = []byte{137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 98, 0, 1, 0, 0, 5, 0, 1, 13, 10, 45, 180, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130}
+//go:embed frontend/src/assets/*
+var embeddedAssets embed.FS
 
 //go:embed frontend/templates
 var templatesFS embed.FS
+
+// Awaryjny placeholder jako zmienna globalna wymagana przez inne moduły
+var placeholderPNG = getEmbeddedAsset("bg_tutorial.webp")
+
+func getEmbeddedAsset(name string) []byte {
+	if b, err := templatesFS.ReadFile("frontend/templates/" + name); err == nil && len(b) > 100 {
+		return b
+	}
+	// Awaryjny minimalny fallback, gdyby szablonu zabrakło
+	return []byte{137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 98, 0, 1, 0, 0, 5, 0, 1, 13, 10, 45, 180, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130}
+}
 
 type App struct {
 	ctx         context.Context
