@@ -3,7 +3,7 @@
   <InfoModal 
     :isOpen="showModal" 
     storageKey="launcher_info_seen" 
-    message="Siemasz Sensei! Po prawej masz listę projektów. Na dole nowy projekt i otworzenie istniejącego - tworzysz gdzie chcesz, otwierasz co chcesz. Projekty mają własną stukturę (możesz edytować ręcznie jeśli jesteś odważny). Za tym masz prosty i szybki tutorial. No i tyle... dobrej zabawy i porąbanych pomysłów! Salamalejkum czy jaktam to się mówi po Chińsku..."
+    message="Siemasz Sensei! Po prawej masz listę projektów. Na dole nowy projekt i otworzenie istniejącego - tworzysz gdzie chcesz, otwierasz co chcesz. Projekty mają własną stukturę (możesz edytować ręcznie jeśli jesteś odważny). Z dołu masz prosty i szybki tutorial. Wygenerowane pliki będą w pobranych. No i tyle... dobrej zabawy i porąbanych pomysłów! Salamalejkum czy jaktam to się mówi po Chińsku..."
     @close="showModal = false" 
   />
   <div class="kimono-launcher">

@@ -11,7 +11,75 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+// Pomocnicza funkcja uruchamiająca procesy w tle bez wyskakującego okienka CMD
+func silentCmd(name string, arg ...string) *exec.Cmd {
+	cmd := exec.Command(name, arg...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		HideWindow:    true,
+		CreationFlags: 0x08000000, // CREATE_NO_WINDOW
+	}
+	return cmd
+}
+
+// UWAGA: te sciezki z ".." zakladaja uklad repo editor/ obok engine/.
+// W dystrybucji (samo exe / sandbox) ich nie ma - ikona po cichu sie nie skopiuje.
+// TODO: po wdrozeniu embeda brac icon.ico z embeda albo z folderu obok exe, bez "..".
+func (a *App) findEngineRoot() (string, string) {
+	if a.ctx != nil {
+		runtime.LogInfo(a.ctx, "[ENGINE] Szukam folderu engine...")
+	}
+
+	// 1. Katalog bieżący (cwd)
+	if cwd, err := os.Getwd(); err == nil {
+		p := filepath.Join(cwd, "engine")
+		if _, err := os.Stat(filepath.Join(p, "MakerEngine.csproj")); err == nil {
+			return p, filepath.Join(cwd, "dist")
+		}
+		if _, err := os.Stat(filepath.Join(cwd, "MakerEngine.csproj")); err == nil {
+			return cwd, filepath.Join(filepath.Dir(cwd), "dist")
+		}
+	}
+
+	// 2. Katalog pliku wykonywalnego EXE i wspinanie się w górę
+	if exePath, err := os.Executable(); err == nil {
+		dir := filepath.Dir(exePath)
+		for i := 0; i < 6; i++ {
+			eng := filepath.Join(dir, "engine")
+			if _, err := os.Stat(filepath.Join(eng, "MakerEngine.csproj")); err == nil {
+				return eng, filepath.Join(dir, "dist")
+			}
+			if _, err := os.Stat(filepath.Join(dir, "MakerEngine.csproj")); err == nil {
+				return dir, filepath.Join(filepath.Dir(dir), "dist")
+			}
+
+			// Dodatkowe sprawdzenie dla struktury sandboxa
+			parentEng := filepath.Join(filepath.Dir(dir), "engine")
+			if _, err := os.Stat(filepath.Join(parentEng, "MakerEngine.csproj")); err == nil {
+				return parentEng, filepath.Join(filepath.Dir(dir), "dist")
+			}
+
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+
+		// 3. Fallback dla specyficznych buildów sandboxa (np. editor/build/bin -> root/engine)
+		rootCandidate := filepath.Join(filepath.Dir(exePath), "..", "..", "..", "engine")
+		cleanRoot := filepath.Clean(rootCandidate)
+		if _, err := os.Stat(filepath.Join(cleanRoot, "MakerEngine.csproj")); err == nil {
+			distCandidate := filepath.Join(filepath.Dir(cleanRoot), "dist")
+			return cleanRoot, distCandidate
+		}
+	}
+
+	return "", ""
+}
 
 func (a *App) BuildGame(projectPath string) (string, error) {
 	if projectPath == "" {
@@ -20,17 +88,26 @@ func (a *App) BuildGame(projectPath string) (string, error) {
 	if projectPath == "" {
 		return "", fmt.Errorf("brak sciezki projektu")
 	}
+
 	engineRoot, distRoot := a.findEngineRoot()
 	if engineRoot == "" {
-		return "", fmt.Errorf("nie znaleziono engine")
+		return "", fmt.Errorf("nie znaleziono engine/MakerEngine.csproj. Uruchom edytor w katalogu projektu z dostępem do źródeł.")
 	}
-	cmd := exec.Command("dotnet", "publish", "-c", "Release", "-o", distRoot, "-p:StaticWebAssetsCompressContent=false", "-p:StaticWebAssetCompressionMode=None", "-p:PublishTrimmed=false", "-p:BlazorWebAssemblyEnableTrimming=false")
+
+	// Czyszczenie starego folderu dist, aby zapobiec błędom SRI (MakerEngine.wasm integrity check)
+	_ = os.RemoveAll(distRoot)
+
+	cmd := silentCmd("dotnet", "publish", "-c", "Release", "-o", distRoot,
+		"-p:StaticWebAssetsCompressContent=false",
+		"-p:StaticWebAssetCompressionMode=None",
+		"-p:PublishTrimmed=false",
+		"-p:BlazorWebAssemblyEnableTrimming=false",
+	)
 	cmd.Dir = engineRoot
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	if err := cmd.Run(); err != nil {
-		return "", err
+		return "", fmt.Errorf("dotnet publish failed (upewnij się, że dotnet jest zainstalowany): %w", err)
 	}
 	return distRoot, nil
 }
@@ -49,8 +126,15 @@ func getNextExeName(downloads, safeName string) (string, string) {
 	return filepath.Join(downloads, fmt.Sprintf("%s_v%d.exe", safeName, time.Now().Unix())), fmt.Sprintf("_v%d", time.Now().Unix())
 }
 
-// BuildExeGame - wersja odporna na brak .NET SDK u użytkownika (używa szablonu / bezpiecznego fallbacku)
 func (a *App) BuildExeGame(projectPath string) (string, error) {
+	// Awaryjna ochrona przed zamknięciem procesu (Panic catcher)
+	defer func() {
+		if r := recover(); r != nil {
+			home, _ := os.UserHomeDir()
+			_ = os.WriteFile(filepath.Join(home, "Desktop", "kimono_panic.txt"), []byte(fmt.Sprintf("PANIC: %v", r)), 0644)
+		}
+	}()
+
 	if projectPath == "" {
 		projectPath = a.projectPath
 	}
@@ -59,137 +143,141 @@ func (a *App) BuildExeGame(projectPath string) (string, error) {
 	}
 	a.projectPath = filepath.Clean(projectPath)
 
-	downloads := getDownloadsFolder()
-	gameName := filepath.Base(a.projectPath)
-	safeName := strings.ReplaceAll(gameName, " ", "-")
-	finalExe, _ := getNextExeName(downloads, safeName)
-
 	engineRoot, distRoot := a.findEngineRoot()
-	
-	// Jeśli silnik C# istnieje (Twoje środowisko deweloperskie), robimy pełny publish
-	if engineRoot != "" {
-		_ = os.MkdirAll(filepath.Join(engineRoot, "wwwroot", "data", "images"), 0755)
-		_ = os.MkdirAll(filepath.Join(engineRoot, "wwwroot", "images"), 0755)
-		_ = os.MkdirAll(filepath.Join(engineRoot, "Assets", "data", "images"), 0755)
-		for _, p := range []string{
-			filepath.Join(engineRoot, "wwwroot", "images", "bg_tutorial.webp"),
-			filepath.Join(engineRoot, "Assets", "data", "images", "bg_tutorial.webp"),
-		} {
-			_ = os.MkdirAll(filepath.Dir(p), 0755)
-			if info, err := os.Stat(p); err != nil || info.Size() == 0 {
-				_ = os.WriteFile(p, placeholderPNG, 0644)
-			}
-		}
-		srcDataTmp := filepath.Join(projectPath, "Data")
-		if _, err := os.Stat(srcDataTmp); os.IsNotExist(err) {
-			srcDataTmp = projectPath
-		}
-		for _, td := range []string{filepath.Join(engineRoot, "Assets", "data"), filepath.Join(engineRoot, "Assets", "wwwroot", "data")} {
-			_ = os.MkdirAll(td, 0755)
-			filepath.Walk(srcDataTmp, func(p string, info fs.FileInfo, err error) error {
-				if err != nil || info.IsDir() {
-					return nil
-				}
-				if strings.HasSuffix(strings.ToLower(info.Name()), ".json") {
-					b, _ := os.ReadFile(p)
-					_ = os.WriteFile(filepath.Join(td, info.Name()), b, 0644)
-				}
-				return nil
-			})
-		}
+	if engineRoot == "" {
+		return "", fmt.Errorf("nie znaleziono engine/MakerEngine.csproj. Uruchom edytor w katalogu projektu z dostępem do źródeł.")
+	}
 
-		_ = a.StopGame()
-		time.Sleep(500 * time.Millisecond)
+	// Czyszczenie dist przed nowym buildem
+	_ = os.RemoveAll(distRoot)
 
-		cmd := exec.Command("dotnet", "publish", "-c", "Release", "-o", distRoot, "-p:StaticWebAssetsCompressContent=false", "-p:StaticWebAssetCompressionMode=None", "-p:PublishTrimmed=false", "-p:BlazorWebAssemblyEnableTrimming=false")
-		cmd.Dir = engineRoot
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-		if err := cmd.Run(); err != nil {
-			return "", fmt.Errorf("publish failed: %w", err)
-		}
+	_ = os.MkdirAll(filepath.Join(engineRoot, "wwwroot", "data", "images"), 0755)
+	_ = os.MkdirAll(filepath.Join(engineRoot, "wwwroot", "images"), 0755)
+	_ = os.MkdirAll(filepath.Join(engineRoot, "Assets", "data", "images"), 0755)
 
-		// Kopiowanie danych projektu do distRoot
-		srcData := filepath.Join(a.projectPath, "Data")
-		if _, err := os.Stat(srcData); os.IsNotExist(err) {
-			srcData = a.projectPath
+	for _, p := range []string{
+		filepath.Join(engineRoot, "wwwroot", "images", "bg_tutorial.webp"),
+		filepath.Join(engineRoot, "Assets", "data", "images", "bg_tutorial.webp"),
+	} {
+		_ = os.MkdirAll(filepath.Dir(p), 0755)
+		if info, err := os.Stat(p); err != nil || info.Size() == 0 {
+			_ = os.WriteFile(p, placeholderPNG, 0644)
 		}
-		dstData := filepath.Join(distRoot, "wwwroot", "data")
-		os.MkdirAll(dstData, 0755)
-		filepath.Walk(srcData, func(p string, info fs.FileInfo, err error) error {
+	}
+
+	srcDataTmp := filepath.Join(projectPath, "Data")
+	if _, err := os.Stat(srcDataTmp); os.IsNotExist(err) {
+		srcDataTmp = projectPath
+	}
+	for _, td := range []string{filepath.Join(engineRoot, "Assets", "data"), filepath.Join(engineRoot, "Assets", "wwwroot", "data")} {
+		_ = os.MkdirAll(td, 0755)
+		filepath.Walk(srcDataTmp, func(p string, info fs.FileInfo, err error) error {
 			if err != nil || info.IsDir() {
 				return nil
 			}
 			if strings.HasSuffix(strings.ToLower(info.Name()), ".json") {
 				b, _ := os.ReadFile(p)
-				os.WriteFile(filepath.Join(dstData, info.Name()), b, 0644)
+				_ = os.WriteFile(filepath.Join(td, info.Name()), b, 0644)
 			}
 			return nil
 		})
-		if _, err := os.Stat(filepath.Join(a.projectPath, "project.janproj")); err == nil {
-			b, _ := os.ReadFile(filepath.Join(a.projectPath, "project.janproj"))
-			os.WriteFile(filepath.Join(distRoot, "wwwroot", "data", "project.janproj"), b, 0644)
-			os.WriteFile(filepath.Join(distRoot, "wwwroot", "project.janproj"), b, 0644)
-		}
+	}
 
-		srcImages := filepath.Join(a.projectPath, "images")
-		dstImages := filepath.Join(distRoot, "wwwroot", "images")
-		if _, err := os.Stat(srcImages); err == nil {
-			os.MkdirAll(dstImages, 0755)
-			filepath.Walk(srcImages, func(p string, info fs.FileInfo, err error) error {
-				if err != nil || info.IsDir() {
-					return nil
-				}
-				low := strings.ToLower(info.Name())
-				if strings.HasSuffix(low, ".webp") || strings.HasSuffix(low, ".png") || strings.HasSuffix(low, ".jpg") || strings.HasSuffix(low, ".jpeg") || strings.HasSuffix(low, ".gif") {
-					b, _ := os.ReadFile(p)
-					os.WriteFile(filepath.Join(dstImages, info.Name()), b, 0644)
-					os.WriteFile(filepath.Join(dstData, "images", info.Name()), b, 0644)
-				}
+	_ = silentCmd("taskkill", "/F", "/IM", "MakerEngine.exe").Run()
+	time.Sleep(300 * time.Millisecond)
+
+	cmd := silentCmd("dotnet", "publish", "-c", "Release", "-o", distRoot,
+		"-p:StaticWebAssetsCompressContent=false",
+		"-p:StaticWebAssetCompressionMode=None",
+		"-p:PublishTrimmed=false",
+		"-p:BlazorWebAssemblyEnableTrimming=false",
+	)
+	cmd.Dir = engineRoot
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("dotnet publish failed (sprawdź czy masz zainstalowane .NET SDK): %w", err)
+	}
+
+	srcData := filepath.Join(a.projectPath, "Data")
+	if _, err := os.Stat(srcData); os.IsNotExist(err) {
+		srcData = a.projectPath
+	}
+	dstData := filepath.Join(distRoot, "wwwroot", "data")
+	os.MkdirAll(dstData, 0755)
+	filepath.Walk(srcData, func(p string, info fs.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		if strings.HasSuffix(strings.ToLower(info.Name()), ".json") {
+			b, _ := os.ReadFile(p)
+			os.WriteFile(filepath.Join(dstData, info.Name()), b, 0644)
+		}
+		return nil
+	})
+	if _, err := os.Stat(filepath.Join(a.projectPath, "project.janproj")); err == nil {
+		b, _ := os.ReadFile(filepath.Join(a.projectPath, "project.janproj"))
+		os.WriteFile(filepath.Join(distRoot, "wwwroot", "data", "project.janproj"), b, 0644)
+		os.WriteFile(filepath.Join(distRoot, "wwwroot", "project.janproj"), b, 0644)
+	}
+
+	srcImages := filepath.Join(a.projectPath, "images")
+	dstImages := filepath.Join(distRoot, "wwwroot", "images")
+	if _, err := os.Stat(srcImages); err == nil {
+		os.MkdirAll(dstImages, 0755)
+		filepath.Walk(srcImages, func(p string, info fs.FileInfo, err error) error {
+			if err != nil || info.IsDir() {
 				return nil
-			})
-		}
-
-		// Tworzenie launchera i pakowanie w exe
-		launcherCandidates := []string{
-			filepath.Join(filepath.Dir(engineRoot), "Launcher", "Launcher.csproj"),
-			filepath.Join(engineRoot, "Launcher", "Launcher.csproj"),
-			filepath.Join(filepath.Dir(engineRoot), "KimonoLauncher", "Launcher.csproj"),
-		}
-		var launcherProj string
-		for _, c := range launcherCandidates {
-			if _, err := os.Stat(c); err == nil {
-				launcherProj = c
-				break
 			}
-		}
+			low := strings.ToLower(info.Name())
+			if strings.HasSuffix(low, ".webp") || strings.HasSuffix(low, ".png") || strings.HasSuffix(low, ".jpg") || strings.HasSuffix(low, ".jpeg") || strings.HasSuffix(low, ".gif") {
+				b, _ := os.ReadFile(p)
+				os.WriteFile(filepath.Join(dstImages, info.Name()), b, 0644)
+				os.WriteFile(filepath.Join(dstData, "images", info.Name()), b, 0644)
+			}
+			return nil
+		})
+	}
 
-		var launcherDir string
-		if launcherProj == "" {
-			launcherDir = filepath.Join(filepath.Dir(engineRoot), "Launcher")
-			_ = os.MkdirAll(launcherDir, 0755)
-			launcherProj = filepath.Join(launcherDir, "Launcher.csproj")
-		} else {
-			launcherDir = filepath.Dir(launcherProj)
+	downloads := getDownloadsFolder()
+	gameName := filepath.Base(a.projectPath)
+	safeName := strings.ReplaceAll(gameName, " ", "-")
+	finalExe, _ := getNextExeName(downloads, safeName)
+
+	launcherCandidates := []string{
+		filepath.Join(filepath.Dir(engineRoot), "Launcher", "Launcher.csproj"),
+		filepath.Join(engineRoot, "Launcher", "Launcher.csproj"),
+	}
+	var launcherProj string
+	for _, c := range launcherCandidates {
+		if _, err := os.Stat(c); err == nil {
+			launcherProj = c
+			break
 		}
+	}
+
+	var launcherDir string
+	if launcherProj == "" {
+		launcherDir = filepath.Join(filepath.Dir(engineRoot), "Launcher")
 		_ = os.MkdirAll(launcherDir, 0755)
-		_ = os.Remove(filepath.Join(launcherDir, "Program.cs"))
+		launcherProj = filepath.Join(launcherDir, "Launcher.csproj")
+	} else {
+		launcherDir = filepath.Dir(launcherProj)
+	}
+	_ = os.MkdirAll(launcherDir, 0755)
+	_ = os.Remove(filepath.Join(launcherDir, "Program.cs"))
 
-		for _, ic := range []string{
-			filepath.Join(filepath.Dir(engineRoot), "..", "editor", "build", "windows", "icon.ico"),
-			filepath.Join(engineRoot, "..", "editor", "build", "windows", "icon.ico"),
-			"editor/build/windows/icon.ico",
-			filepath.Join("editor", "build", "windows", "icon.ico"),
-		} {
-			if _, err := os.Stat(ic); err == nil {
-				b, _ := os.ReadFile(ic)
-				_ = os.WriteFile(filepath.Join(launcherDir, "icon.ico"), b, 0644)
-				break
-			}
+	for _, ic := range []string{
+		filepath.Join(filepath.Dir(engineRoot), "..", "editor", "build", "windows", "icon.ico"),
+		filepath.Join(engineRoot, "..", "editor", "build", "windows", "icon.ico"),
+		"editor/build/windows/icon.ico",
+	} {
+		if _, err := os.Stat(ic); err == nil {
+			b, _ := os.ReadFile(ic)
+			_ = os.WriteFile(filepath.Join(launcherDir, "icon.ico"), b, 0644)
+			break
 		}
+	}
 
-		csprojContent := `<Project Sdk="Microsoft.NET.Sdk">
+	csprojContent := `<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
@@ -216,15 +304,13 @@ func (a *App) BuildExeGame(projectPath string) (string, error) {
     </Content>
   </ItemGroup>
 </Project>`
-		_ = os.WriteFile(launcherProj, []byte(csprojContent), 0644)
+	_ = os.WriteFile(launcherProj, []byte(csprojContent), 0644)
 
-		programCs := `using System;
+	programCs := `using System;
 using System.IO;
 using System.IO.Compression;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.WinForms;
 using Microsoft.Web.WebView2.Core;
@@ -256,7 +342,6 @@ class Program {
             Path.Combine(AppContext.BaseDirectory, "wwwroot.zip"),
             Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "wwwroot.zip"),
             Path.Combine(Directory.GetCurrentDirectory(), "wwwroot.zip"),
-            Path.Combine(Path.GetTempPath(), "KimonoGM", "wwwroot.zip"),
         };
         foreach (var p in candidates) if (File.Exists(p)) return p;
         try {
@@ -302,7 +387,6 @@ class Program {
             var fallback = new[] {
                 Path.Combine(AppContext.BaseDirectory, "wwwroot"),
                 Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "wwwroot"),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "wwwroot"),
             };
             foreach (var c in fallback) {
                 if (File.Exists(Path.Combine(c, "index.html"))) { wwwroot = c; break; }
@@ -324,7 +408,7 @@ class Program {
         http.Prefixes.Add($"http://localhost:{port}/");
         http.Start();
 
-        ThreadPool.QueueUserWorkItem(_ => {
+        System.Threading.ThreadPool.QueueUserWorkItem(_ => {
             while (http.IsListening) {
                 try {
                     var ctx = http.GetContext();
@@ -333,9 +417,6 @@ class Program {
                     if (string.IsNullOrEmpty(urlPath)) urlPath = "index.html";
                     var filePath = Path.GetFullPath(Path.Combine(wwwroot, urlPath.Replace('/', Path.DirectorySeparatorChar)));
                     if (!filePath.StartsWith(Path.GetFullPath(wwwroot), StringComparison.OrdinalIgnoreCase)) {
-                        filePath = Path.Combine(wwwroot, "index.html");
-                    }
-                    if (!File.Exists(filePath) && !urlPath.Contains(".")) {
                         filePath = Path.Combine(wwwroot, "index.html");
                     }
                     if (File.Exists(filePath)) {
@@ -356,7 +437,6 @@ class Program {
 
         var baseDir = AppContext.BaseDirectory;
         var iconPath = Path.Combine(baseDir, "icon.ico");
-        if (!File.Exists(iconPath)) iconPath = Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "icon.ico");
         System.Drawing.Icon icon = null;
         if (File.Exists(iconPath)) { try { icon = new System.Drawing.Icon(iconPath); } catch {} }
 
@@ -378,144 +458,74 @@ class Program {
         Application.Run(form);
     }
 }`
-		_ = os.WriteFile(filepath.Join(launcherDir, "Program.cs"), []byte(programCs), 0644)
+	_ = os.WriteFile(filepath.Join(launcherDir, "Program.cs"), []byte(programCs), 0644)
 
-		srcWwwroot := filepath.Join(distRoot, "wwwroot")
-		zipPath := filepath.Join(launcherDir, "wwwroot.zip")
-		_ = os.Remove(zipPath)
-		zf, err := os.Create(zipPath)
-		if err != nil {
-			return "", err
-		}
-		zw := zip.NewWriter(zf)
-		filepath.Walk(srcWwwroot, func(p string, info fs.FileInfo, err error) error {
-			if err != nil || info.IsDir() {
-				return nil
-			}
-			rel, _ := filepath.Rel(srcWwwroot, p)
-			f, _ := zw.Create(filepath.ToSlash(rel))
-			src, _ := os.Open(p)
-			if src != nil {
-				io.Copy(f, src)
-				src.Close()
-			}
+	srcWwwroot := filepath.Join(distRoot, "wwwroot")
+	zipPath := filepath.Join(launcherDir, "wwwroot.zip")
+	_ = os.Remove(zipPath)
+	zf, err := os.Create(zipPath)
+	if err != nil {
+		return "", err
+	}
+	zw := zip.NewWriter(zf)
+	filepath.Walk(srcWwwroot, func(p string, info fs.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
 			return nil
-		})
-		zw.Close()
-		zf.Close()
-
-		tmpOut := filepath.Join(os.TempDir(), "kimono_launcher_publish")
-		os.RemoveAll(tmpOut)
-
-		pubCmd := exec.Command("dotnet", "publish", launcherProj, "-c", "Release", "-r", "win-x64", "--self-contained", "true", "-p:PublishSingleFile=true", "-p:IncludeNativeLibrariesForSelfExtract=true", "-p:IncludeAllContentForSelfExtract=true", "-o", tmpOut)
-		pubCmd.Stdout = os.Stdout
-		pubCmd.Stderr = os.Stderr
-		pubCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-		if err := pubCmd.Run(); err != nil {
-			return "", fmt.Errorf("launcher publish failed: %w", err)
 		}
-
-		var exePath string
-		if _, err := os.Stat(filepath.Join(tmpOut, "Launcher.exe")); err == nil {
-			exePath = filepath.Join(tmpOut, "Launcher.exe")
-		} else {
-			if files, _ := os.ReadDir(tmpOut); files != nil {
-				for _, f := range files {
-					if strings.HasSuffix(strings.ToLower(f.Name()), ".exe") {
-						exePath = filepath.Join(tmpOut, f.Name())
-						break
-					}
-				}
-			}
+		rel, _ := filepath.Rel(srcWwwroot, p)
+		f, _ := zw.Create(filepath.ToSlash(rel))
+		src, _ := os.Open(p)
+		if src != nil {
+			io.Copy(f, src)
+			src.Close()
 		}
-		if exePath == "" {
-			return "", fmt.Errorf("nie znaleziono Launcher.exe w %s", tmpOut)
-		}
+		return nil
+	})
+	zw.Close()
+	zf.Close()
 
-		// Automatycznie zapisujemy ten wygenerowany launcher jako engine_template.exe
-		templateDest := filepath.Join(filepath.Dir(engineRoot), "engine_template.exe")
-		_ = copyFile(exePath, templateDest)
+	tmpOut := filepath.Join(os.TempDir(), "kimono_launcher_publish")
+	os.RemoveAll(tmpOut)
 
-		b, _ := os.ReadFile(exePath)
-		if err := os.WriteFile(finalExe, b, 0644); err != nil {
-			return "", err
-		}
-	} else {
-		// FALLBACK DLA ZNAJOMEGO (Gdy nie ma folderu engine na dysku, np. u użytkownika edytora):
-		execDir, _ := os.Executable()
-		templateExe := filepath.Join(filepath.Dir(execDir), "engine_template.exe")
-		if _, err := os.Stat(templateExe); err == nil {
-			if err := copyFile(templateExe, finalExe); err != nil {
-				return "", fmt.Errorf("nie udało się skopiować szablonu gry: %w", err)
-			}
-			
-			// Budujemy zip z danymi projektu również u użytkownika (z folderu Data)
-			srcData := filepath.Join(a.projectPath, "Data")
-			if _, err := os.Stat(srcData); os.IsNotExist(err) {
-				srcData = a.projectPath
-			}
-			tmpWwwroot := filepath.Join(os.TempDir(), "kimono_user_wwwroot")
-			os.RemoveAll(tmpWwwroot)
-			os.MkdirAll(filepath.Join(tmpWwwroot, "data"), 0755)
-			
-			filepath.Walk(srcData, func(p string, info fs.FileInfo, err error) error {
-				if err != nil || info.IsDir() { return nil }
-				if strings.HasSuffix(strings.ToLower(info.Name()), ".json") {
-					b, _ := os.ReadFile(p)
-					os.WriteFile(filepath.Join(tmpWwwroot, "data", info.Name()), b, 0644)
-				}
-				return nil
-			})
-			if _, err := os.Stat(filepath.Join(a.projectPath, "project.janproj")); err == nil {
-				b, _ := os.ReadFile(filepath.Join(a.projectPath, "project.janproj"))
-				os.WriteFile(filepath.Join(tmpWwwroot, "data", "project.janproj"), b, 0644)
-				os.WriteFile(filepath.Join(tmpWwwroot, "project.janproj"), b, 0644)
-			}
-			
-			// Kopiujemy też obrazki
-			srcImages := filepath.Join(a.projectPath, "images")
-			if _, err := os.Stat(srcImages); err == nil {
-				dstImages := filepath.Join(tmpWwwroot, "images")
-				os.MkdirAll(dstImages, 0755)
-				filepath.Walk(srcImages, func(p string, info fs.FileInfo, err error) error {
-					if err != nil || info.IsDir() { return nil }
-					b, _ := os.ReadFile(p)
-					os.WriteFile(filepath.Join(dstImages, info.Name()), b, 0644)
-					return nil
-				})
-			}
-
-			userZipPath := filepath.Join(filepath.Dir(finalExe), "wwwroot.zip")
-			_ = os.Remove(userZipPath)
-			zf, err := os.Create(userZipPath)
-			if err == nil {
-				zw := zip.NewWriter(zf)
-				filepath.Walk(tmpWwwroot, func(p string, info fs.FileInfo, err error) error {
-					if err != nil || info.IsDir() { return nil }
-					rel, _ := filepath.Rel(tmpWwwroot, p)
-					f, _ := zw.Create(filepath.ToSlash(rel))
-					src, _ := os.Open(p)
-					if src != nil {
-						io.Copy(f, src)
-						src.Close()
-					}
-					return nil
-				})
-				zw.Close()
-				zf.Close()
-			}
-			os.RemoveAll(tmpWwwroot)
-
-		} else {
-			return "", fmt.Errorf("BŁĄD: Brak środowiska deweloperskiego silnika oraz szablonu gry. Uruchom edytor z pakietem zasobów.")
-		}
+	c := silentCmd("dotnet", "publish", launcherProj, "-c", "Release", "-r", "win-x64", "--self-contained", "true", "-p:PublishSingleFile=true", "-p:IncludeNativeLibrariesForSelfExtract=true", "-p:IncludeAllContentForSelfExtract=true", "-o", tmpOut)
+	if err := c.Run(); err != nil {
+		return "", fmt.Errorf("launcher publish failed: %w", err)
 	}
 
-	exec.Command("explorer", "/select,", finalExe).Start()
+	var exePath string
+	if files, _ := os.ReadDir(tmpOut); files != nil {
+		for _, f := range files {
+			if strings.HasSuffix(strings.ToLower(f.Name()), ".exe") {
+				exePath = filepath.Join(tmpOut, f.Name())
+				break
+			}
+		}
+	}
+	if exePath == "" {
+		return "", fmt.Errorf("nie znaleziono Launcher.exe w %s", tmpOut)
+	}
+
+	b, err := os.ReadFile(exePath)
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(finalExe, b, 0644); err != nil {
+		return "", err
+	}
+
+	_ = silentCmd("explorer", "/select,", finalExe).Start()
 	return finalExe, nil
 }
 
 func (a *App) BuildPublicPack(projectPath string) (string, error) {
+	// Awaryjna ochrona przed awarią
+	defer func() {
+		if r := recover(); r != nil {
+			home, _ := os.UserHomeDir()
+			_ = os.WriteFile(filepath.Join(home, "Desktop", "kimono_panic_web.log"), []byte(fmt.Sprintf("PANIC: %v", r)), 0644)
+		}
+	}()
+
 	if projectPath == "" {
 		projectPath = a.projectPath
 	}
@@ -524,15 +534,17 @@ func (a *App) BuildPublicPack(projectPath string) (string, error) {
 	}
 	projectPath = filepath.Clean(projectPath)
 	a.projectPath = projectPath
+
 	engineRoot, distRoot := a.findEngineRoot()
 	if engineRoot == "" {
-		return "", fmt.Errorf("nie znaleziono engine/MakerEngine.csproj")
+		return "", fmt.Errorf("nie znaleziono engine/MakerEngine.csproj. Uruchom edytor w katalogu projektu z dostępem do źródeł.")
 	}
+
 	os.MkdirAll(distRoot, 0755)
 	_ = os.MkdirAll(filepath.Join(engineRoot, "wwwroot", "data", "images"), 0755)
 	_ = os.MkdirAll(filepath.Join(engineRoot, "wwwroot", "images"), 0755)
 	_ = os.MkdirAll(filepath.Join(engineRoot, "Assets", "data", "images"), 0755)
-	_ = os.MkdirAll(filepath.Join(engineRoot, "Assets", "wwwroot", "data", "images"), 0755)
+
 	for _, p := range []string{
 		filepath.Join(engineRoot, "wwwroot", "images", "bg_tutorial.webp"),
 		filepath.Join(engineRoot, "wwwroot", "data", "images", "bg_tutorial.webp"),
@@ -543,6 +555,7 @@ func (a *App) BuildPublicPack(projectPath string) (string, error) {
 			_ = os.WriteFile(p, placeholderPNG, 0644)
 		}
 	}
+
 	srcDataTmp := filepath.Join(projectPath, "Data")
 	if _, err := os.Stat(srcDataTmp); os.IsNotExist(err) {
 		srcDataTmp = projectPath
@@ -563,34 +576,26 @@ func (a *App) BuildPublicPack(projectPath string) (string, error) {
 			b, _ := os.ReadFile(filepath.Join(projectPath, "project.janproj"))
 			_ = os.WriteFile(filepath.Join(td, "project.janproj"), b, 0644)
 		}
-		if _, err := os.Stat(filepath.Join(td, "day1.json")); err != nil {
-			_ = os.WriteFile(filepath.Join(td, "day1.json"), []byte(`[{"Id":"start","SceneTitle":"Start","Background":"","Text":"Start","Choices":[{"Text":"Dalej","Next":"koniec"}],"Type":"normal","Day":1},{"Id":"koniec","SceneTitle":"KONIEC","Background":"","Text":"Koniec","IsEndDay":true,"Type":"end_of_day","Day":1,"Choices":[]}]`), 0644)
-		}
-		if _, err := os.Stat(filepath.Join(td, "_manifest.json")); err != nil {
-			_ = os.WriteFile(filepath.Join(td, "_manifest.json"), []byte(`{"days":["day1"],"startDay":"day1","startScene":"start"}`), 0644)
-		}
 	}
-	cmd := exec.Command("dotnet", "publish", "-c", "Release", "-o", distRoot, "-p:StaticWebAssetsCompressContent=false", "-p:StaticWebAssetCompressionMode=None", "-p:PublishTrimmed=false", "-p:BlazorWebAssemblyEnableTrimming=false")
+
+	cmd := silentCmd("dotnet", "publish", "-c", "Release", "-o", distRoot,
+		"-p:StaticWebAssetsCompressContent=false",
+		"-p:StaticWebAssetCompressionMode=None",
+		"-p:PublishTrimmed=false",
+		"-p:BlazorWebAssemblyEnableTrimming=false",
+	)
 	cmd.Dir = engineRoot
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("dotnet publish failed: %w", err)
 	}
+
 	srcData := filepath.Join(projectPath, "Data")
 	if _, err := os.Stat(srcData); os.IsNotExist(err) {
 		srcData = projectPath
 	}
 	dstData := filepath.Join(distRoot, "wwwroot", "data")
 	os.MkdirAll(dstData, 0755)
-	if files, err := os.ReadDir(dstData); err == nil {
-		for _, f := range files {
-			if strings.HasSuffix(strings.ToLower(f.Name()), ".json") {
-				os.Remove(filepath.Join(dstData, f.Name()))
-			}
-		}
-	}
+
 	filepath.Walk(srcData, func(p string, info fs.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
@@ -601,6 +606,7 @@ func (a *App) BuildPublicPack(projectPath string) (string, error) {
 		}
 		return nil
 	})
+
 	srcImages := filepath.Join(projectPath, "images")
 	dstImages := filepath.Join(distRoot, "wwwroot", "images")
 	if _, err := os.Stat(srcImages); err == nil {
@@ -617,60 +623,44 @@ func (a *App) BuildPublicPack(projectPath string) (string, error) {
 			return nil
 		})
 	}
-	srcSounds := filepath.Join(projectPath, "sounds")
-	dstSounds := filepath.Join(distRoot, "wwwroot", "sounds")
-	if _, err := os.Stat(srcSounds); err == nil {
-		filepath.Walk(srcSounds, func(p string, info fs.FileInfo, err error) error {
-			if err != nil || info.IsDir() {
-				return nil
-			}
-			rel, _ := filepath.Rel(srcSounds, p)
-			dst := filepath.Join(dstSounds, rel)
-			os.MkdirAll(filepath.Dir(dst), 0755)
-			b, _ := os.ReadFile(p)
-			os.WriteFile(dst, b, 0644)
-			return nil
-		})
-	}
+
 	if _, err := os.Stat(filepath.Join(projectPath, "project.janproj")); err == nil {
 		b, _ := os.ReadFile(filepath.Join(projectPath, "project.janproj"))
 		os.WriteFile(filepath.Join(distRoot, "wwwroot", "project.janproj"), b, 0644)
 	}
+
 	gameName := filepath.Base(projectPath)
 	safeName := strings.ReplaceAll(gameName, " ", "-")
 	timestamp := time.Now().Format("20060102-1504")
 	downloads := getDownloadsFolder()
 	os.MkdirAll(downloads, 0755)
+
 	finalZip := filepath.Join(downloads, fmt.Sprintf("%s-PUBLIC-%s.zip", safeName, timestamp))
-	unpackedFolder := filepath.Join(downloads, fmt.Sprintf("%s-PUBLIC-%s", safeName, timestamp))
-	os.RemoveAll(unpackedFolder)
+
 	zf, err := os.Create(finalZip)
 	if err != nil {
 		return "", err
 	}
 	zw := zip.NewWriter(zf)
 	wwwrootPath := filepath.Join(distRoot, "wwwroot")
+
 	filepath.Walk(wwwrootPath, func(p string, info fs.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}
 		rel, _ := filepath.Rel(wwwrootPath, p)
-		relSlash := filepath.ToSlash(rel)
-		f, _ := zw.Create(relSlash)
+		f, _ := zw.Create(filepath.ToSlash(rel))
 		src, _ := os.Open(p)
 		if src != nil {
 			io.Copy(f, src)
 			src.Close()
 		}
-		dstFile := filepath.Join(unpackedFolder, rel)
-		os.MkdirAll(filepath.Dir(dstFile), 0755)
-		b, _ := os.ReadFile(p)
-		os.WriteFile(dstFile, b, 0644)
 		return nil
 	})
 	zw.Close()
 	zf.Close()
-	exec.Command("explorer", "/select,", finalZip).Start()
+
+	_ = silentCmd("explorer", "/select,", finalZip).Start()
 	return finalZip, nil
 }
 

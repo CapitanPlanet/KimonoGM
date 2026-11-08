@@ -1,59 +1,45 @@
-bin/
-obj/
-publish/
+# === KimonoGM - build outputs, nigdy nie commitujemy ===
 dist/
-node_modules/
-_old_images_backup/
-wwwroot/lib/
+publish/
+engine-publish/
+**/bin/
+**/obj/
+**/node_modules/
+
+# Lokalne buildy - CI i tak wrzuca exe do Release, gitignore tego nie blokuje
 *.exe
 *.zip
+*.syso
+
+# === IDE / OS ===
 .vs/
 .idea/
-et\ --hard*
 *.lscache
+*.log
+build-exe.log
+build-web.log
+kimonogm_run.log
 
-# === JANUSZ MAKER ===
+# === Śmieci lokalne ===
+_old_images_backup/
+
+# === Wygenerowane dane gry - NIGDY nie commituj danych projektu do silnika ===
+# Źródła wwwroot (css/js/index.html) commitujemy, dane (data/images/sounds) nie.
 **/wwwroot/data/
 **/wwwroot/sounds/
 **/wwwroot/images/
 **/wwwroot/Images/
+**/wwwroot/project.janproj
 **/Assets/old/
+
+# === Gry użytkowników - w repo zostają TYLKO pokazówki w Games/ ===
+# Jak chcesz trzymać pokazówki, trzymaj je w Games/demo/ i odkomentuj wyjątek poniżej:
+# !Games/demo/
 **/games/
-Tools/bin/
-Tools/obj/
-# rebrand bins
-**/MakerEngine/bin/
-**/MakerEngine/obj/
 
-
-# generated
-engine-csharp/wwwroot/project.janproj
-engine-csharp/wwwroot/data/
-engine-csharp/wwwroot/Images/
-engine-csharp/wwwroot/sounds/
-
-
-engine/wwwroot/project.janproj
-engine/wwwroot/data/
-
-
-# generated - never commit
-engine/wwwroot/project.janproj
-engine/wwwroot/data/
-engine/wwwroot/Images/
-engine/wwwroot/sounds/
-
-# BuilderEXE temp
-[STRIPPED 73 bytes]*.exe
+# === BuilderEXE temp ===
 tools/BuilderEXE/*.syso
-# Build logs
-build-exe.log
-build-web.log
-kimonogm_run.log
-dist/
-[STRIPPED 79 bytes]
-# KimonoGM - build [STRIPPED 181 bytes]
-*.exe
-*.zip
-[STRIPPED 134 bytes]
+Launcher/wwwroot.zip
+
 engine/Assets/
+Launcher/Assets/
