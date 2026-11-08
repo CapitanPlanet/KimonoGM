@@ -81,6 +81,61 @@ func (a *App) findEngineRoot() (string, string) {
 	return "", ""
 }
 
+
+// findPublishedEngine szuka GOTOWEGO silnika z CI, nie zrodel.
+// Zwraca folder, w ktorym jest wwwroot/ z index.html, albo "" jak nie ma.
+// Szuka tylko obok exe: ./engine-publish
+func (a *App) findPublishedEngine() string {
+    if exePath, err := os.Executable(); err == nil {
+        exeDir := filepath.Dir(exePath)
+        for _, cand := range []string{
+            filepath.Join(exeDir, "engine-publish"),
+            filepath.Join(exeDir, "engine-publish", "wwwroot"),
+        } {
+            if _, err := os.Stat(filepath.Join(cand, "wwwroot", "index.html")); err == nil {
+                return cand
+            }
+            if _, err := os.Stat(filepath.Join(cand, "index.html")); err == nil {
+                return cand
+            }
+        }
+    }
+    return ""
+}
+
+// copyDir kopiuje caly folder rekurencyjnie (pliki + podfoldery)
+func copyDir(src, dst string) error {
+    return filepath.Walk(src, func(path string, info fs.FileInfo, err error) error {
+        if err != nil {
+            return err
+        }
+        rel, _ := filepath.Rel(src, path)
+        target := filepath.Join(dst, rel)
+        if info.IsDir() {
+            return os.MkdirAll(target, 0755)
+        }
+        if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+            return err
+        }
+        b, err := os.ReadFile(path)
+        if err != nil {
+            return err
+        }
+        return os.WriteFile(target, b, 0644)
+    })
+}
+
+// prepareEngineFromPublished kopiuje gotowy silnik do tempa i zwraca
+// engineRoot (kopia robocza) + distRoot. Nie rusza oryginalnego engine-publish.
+func (a *App) prepareEngineFromPublished(published string) (string, string) {
+    tmpEngine := filepath.Join(os.TempDir(), "KimonoGM", "engine-work")
+    _ = os.RemoveAll(tmpEngine)
+    _ = os.MkdirAll(tmpEngine, 0755)
+    _ = copyDir(published, tmpEngine)
+    distRoot := filepath.Join(os.TempDir(), "KimonoGM", "dist")
+    return tmpEngine, distRoot
+}
+
 func (a *App) BuildGame(projectPath string) (string, error) {
 	if projectPath == "" {
 		projectPath = a.projectPath
@@ -89,25 +144,38 @@ func (a *App) BuildGame(projectPath string) (string, error) {
 		return "", fmt.Errorf("brak sciezki projektu")
 	}
 
-	engineRoot, distRoot := a.findEngineRoot()
-	if engineRoot == "" {
-		return "", fmt.Errorf("nie znaleziono engine/MakerEngine.csproj. Uruchom edytor w katalogu projektu z dostępem do źródeł.")
+	var engineRoot, distRoot string
+	usePublished := false
+	if pub := a.findPublishedEngine(); pub != "" {
+		usePublished = true
+		engineRoot, distRoot = a.prepareEngineFromPublished(pub)
+	} else {
+		engineRoot, distRoot = a.findEngineRoot()
+		if engineRoot == "" {
+			return "", fmt.Errorf("nie znaleziono engine/MakerEngine.csproj. Uruchom edytor w katalogu projektu z dostępem do źródeł.")
+		}
 	}
 
 	// Czyszczenie starego folderu dist, aby zapobiec błędom SRI (MakerEngine.wasm integrity check)
 	_ = os.RemoveAll(distRoot)
 
-	cmd := silentCmd("dotnet", "publish", "-c", "Release", "-o", distRoot,
-		"-p:StaticWebAssetsCompressContent=false",
-		"-p:StaticWebAssetCompressionMode=None",
-		"-p:PublishTrimmed=false",
-		"-p:BlazorWebAssemblyEnableTrimming=false",
-	)
-	cmd.Dir = engineRoot
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("dotnet publish failed (upewnij się, że dotnet jest zainstalowany): %w", err)
+	if !usePublished {
+		cmd := silentCmd("dotnet", "publish", "-c", "Release", "-o", distRoot,
+			"-p:StaticWebAssetsCompressContent=false",
+			"-p:StaticWebAssetCompressionMode=None",
+			"-p:PublishTrimmed=false",
+			"-p:BlazorWebAssemblyEnableTrimming=false",
+		)
+		cmd.Dir = engineRoot
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return "", fmt.Errorf("dotnet publish failed (upewnij się, że dotnet jest zainstalowany): %w", err)
+		}
+	} else {
+		if _, err := os.Stat(filepath.Join(distRoot, "wwwroot", "index.html")); err != nil {
+			_ = copyDir(filepath.Join(engineRoot, "wwwroot"), filepath.Join(distRoot, "wwwroot"))
+		}
 	}
 	return distRoot, nil
 }
@@ -143,9 +211,19 @@ func (a *App) BuildExeGame(projectPath string) (string, error) {
 	}
 	a.projectPath = filepath.Clean(projectPath)
 
-	engineRoot, distRoot := a.findEngineRoot()
-	if engineRoot == "" {
-		return "", fmt.Errorf("nie znaleziono engine/MakerEngine.csproj. Uruchom edytor w katalogu projektu z dostępem do źródeł.")
+	// KROK 4: najpierw sprobuj gotowy silnik z CI (engine-publish obok exe).
+	// Jak jest - nie szukamy zrodel, nie wolamy dotnet publish dla silnika.
+	// Jak nie ma - stary sposob dev (zrodla + dotnet).
+	var engineRoot, distRoot string
+	usePublished := false
+	if pub := a.findPublishedEngine(); pub != "" {
+		usePublished = true
+		engineRoot, distRoot = a.prepareEngineFromPublished(pub)
+	} else {
+		engineRoot, distRoot = a.findEngineRoot()
+		if engineRoot == "" {
+			return "", fmt.Errorf("nie znaleziono engine/MakerEngine.csproj. Uruchom edytor w katalogu projektu z dostępem do źródeł.")
+		}
 	}
 
 	// Czyszczenie dist przed nowym buildem
@@ -186,15 +264,25 @@ func (a *App) BuildExeGame(projectPath string) (string, error) {
 	_ = silentCmd("taskkill", "/F", "/IM", "MakerEngine.exe").Run()
 	time.Sleep(300 * time.Millisecond)
 
-	cmd := silentCmd("dotnet", "publish", "-c", "Release", "-o", distRoot,
-		"-p:StaticWebAssetsCompressContent=false",
-		"-p:StaticWebAssetCompressionMode=None",
-		"-p:PublishTrimmed=false",
-		"-p:BlazorWebAssemblyEnableTrimming=false",
-	)
-	cmd.Dir = engineRoot
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("dotnet publish failed (sprawdź czy masz zainstalowane .NET SDK): %w", err)
+	// Silnik z CI jest juz zbudowany - nie wolamy dotnet publish dla niego.
+	// W trybie dev (zrodla) budujemy normalnie.
+	if !usePublished {
+		cmd := silentCmd("dotnet", "publish", "-c", "Release", "-o", distRoot,
+			"-p:StaticWebAssetsCompressContent=false",
+			"-p:StaticWebAssetCompressionMode=None",
+			"-p:PublishTrimmed=false",
+			"-p:BlazorWebAssemblyEnableTrimming=false",
+		)
+		cmd.Dir = engineRoot
+		if err := cmd.Run(); err != nil {
+			return "", fmt.Errorf("dotnet publish failed (sprawdź czy masz zainstalowane .NET SDK): %w", err)
+		}
+	} else {
+		// Gotowy silnik: distRoot/wwwroot = kopia z engine-publish, uzupelniona wyzej danymi projektu.
+		// Jak distRoot jest pusty (bo prepareEngine kopiuje caly folder), to przekopiuj wwwroot z kopii roboczej.
+		if _, err := os.Stat(filepath.Join(distRoot, "wwwroot", "index.html")); err != nil {
+			_ = copyDir(filepath.Join(engineRoot, "wwwroot"), filepath.Join(distRoot, "wwwroot"))
+		}
 	}
 
 	srcData := filepath.Join(a.projectPath, "Data")
@@ -535,9 +623,16 @@ func (a *App) BuildPublicPack(projectPath string) (string, error) {
 	projectPath = filepath.Clean(projectPath)
 	a.projectPath = projectPath
 
-	engineRoot, distRoot := a.findEngineRoot()
-	if engineRoot == "" {
-		return "", fmt.Errorf("nie znaleziono engine/MakerEngine.csproj. Uruchom edytor w katalogu projektu z dostępem do źródeł.")
+	var engineRoot, distRoot string
+	usePublished := false
+	if pub := a.findPublishedEngine(); pub != "" {
+		usePublished = true
+		engineRoot, distRoot = a.prepareEngineFromPublished(pub)
+	} else {
+		engineRoot, distRoot = a.findEngineRoot()
+		if engineRoot == "" {
+			return "", fmt.Errorf("nie znaleziono engine/MakerEngine.csproj. Uruchom edytor w katalogu projektu z dostępem do źródeł.")
+		}
 	}
 
 	os.MkdirAll(distRoot, 0755)
@@ -578,15 +673,21 @@ func (a *App) BuildPublicPack(projectPath string) (string, error) {
 		}
 	}
 
-	cmd := silentCmd("dotnet", "publish", "-c", "Release", "-o", distRoot,
-		"-p:StaticWebAssetsCompressContent=false",
-		"-p:StaticWebAssetCompressionMode=None",
-		"-p:PublishTrimmed=false",
-		"-p:BlazorWebAssemblyEnableTrimming=false",
-	)
-	cmd.Dir = engineRoot
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("dotnet publish failed: %w", err)
+	if !usePublished {
+		cmd := silentCmd("dotnet", "publish", "-c", "Release", "-o", distRoot,
+			"-p:StaticWebAssetsCompressContent=false",
+			"-p:StaticWebAssetCompressionMode=None",
+			"-p:PublishTrimmed=false",
+			"-p:BlazorWebAssemblyEnableTrimming=false",
+		)
+		cmd.Dir = engineRoot
+		if err := cmd.Run(); err != nil {
+			return "", fmt.Errorf("dotnet publish failed: %w", err)
+		}
+	} else {
+		if _, err := os.Stat(filepath.Join(distRoot, "wwwroot", "index.html")); err != nil {
+			_ = copyDir(filepath.Join(engineRoot, "wwwroot"), filepath.Join(distRoot, "wwwroot"))
+		}
 	}
 
 	srcData := filepath.Join(projectPath, "Data")
