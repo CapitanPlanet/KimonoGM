@@ -27,6 +27,19 @@ jobs:
         with:
           node-version: '22'
 
+      # === NOWE - Krok 3a: silnik budujemy RAZ, w CI, nie u użytkownika ===
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish Engine (gotowy silnik, bez zrodel)
+        run: |
+          cd engine
+          dotnet workload install wasm-tools
+          dotnet publish -c Release -o ../engine-publish -p:PublishTrimmed=false -p:BlazorWebAssemblyEnableTrimming=false -p:StaticWebAssetsCompressContent=false
+        shell: pwsh
+
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
@@ -35,19 +48,29 @@ jobs:
           cd editor
           wails build -clean -ldflags "-H=windowsgui"
 
-      - name: Upload EXE as Artifact (backup)
+      # === NOWE - paczka, nie samo exe ===
+      # To naprawia sandbox: edytor dostaje gotowy silnik obok siebie
+      - name: Pack bundle (exe + engine-publish)
+        run: |
+          New-Item -ItemType Directory -Force -Path bundle | Out-Null
+          Copy-Item editor/build/bin/KimonoGM.exe bundle/
+          Copy-Item -Recurse engine-publish bundle/engine-publish
+          Compress-Archive -Path bundle/* -DestinationPath KimonoGM-bundle.zip -Force
+        shell: pwsh
+
+      - name: Upload bundle as Artifact (backup)
         uses: actions/upload-artifact@v5
         with:
           name: KimonoGM-windows
-          path: editor/build/bin/KimonoGM.exe
+          path: KimonoGM-bundle.zip
           if-no-files-found: error
 
       - name: Upload to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          files: editor/build/bin/KimonoGM.exe
+          files: KimonoGM-bundle.zip
           tag_name: v1.0.${{ github.run_number }}
           name: "KimonoGM Editor v1.0.${{ github.run_number }}"
-          body: "Automatyczny build desktopowego edytora prosto z gałęzi main!"
+          body: "Automatyczny build desktopowego edytora prosto z gałęzi main! Paczka zawiera edytor + gotowy silnik (engine-publish). Rozpakuj CALA paczke, nie samo exe."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
