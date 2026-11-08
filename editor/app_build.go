@@ -11,6 +11,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // Pomocnicza funkcja uruchamiająca procesy w tle bez wyskakującego okienka CMD
@@ -23,6 +25,62 @@ func silentCmd(name string, arg ...string) *exec.Cmd {
 	return cmd
 }
 
+// UWAGA: te sciezki z ".." zakladaja uklad repo editor/ obok engine/.
+// W dystrybucji (samo exe / sandbox) ich nie ma - ikona po cichu sie nie skopiuje.
+// TODO: po wdrozeniu embeda brac icon.ico z embeda albo z folderu obok exe, bez "..".
+func (a *App) findEngineRoot() (string, string) {
+	if a.ctx != nil {
+		runtime.LogInfo(a.ctx, "[ENGINE] Szukam folderu engine...")
+	}
+
+	// 1. Katalog bieżący (cwd)
+	if cwd, err := os.Getwd(); err == nil {
+		p := filepath.Join(cwd, "engine")
+		if _, err := os.Stat(filepath.Join(p, "MakerEngine.csproj")); err == nil {
+			return p, filepath.Join(cwd, "dist")
+		}
+		if _, err := os.Stat(filepath.Join(cwd, "MakerEngine.csproj")); err == nil {
+			return cwd, filepath.Join(filepath.Dir(cwd), "dist")
+		}
+	}
+
+	// 2. Katalog pliku wykonywalnego EXE i wspinanie się w górę
+	if exePath, err := os.Executable(); err == nil {
+		dir := filepath.Dir(exePath)
+		for i := 0; i < 6; i++ {
+			eng := filepath.Join(dir, "engine")
+			if _, err := os.Stat(filepath.Join(eng, "MakerEngine.csproj")); err == nil {
+				return eng, filepath.Join(dir, "dist")
+			}
+			if _, err := os.Stat(filepath.Join(dir, "MakerEngine.csproj")); err == nil {
+				return dir, filepath.Join(filepath.Dir(dir), "dist")
+			}
+
+			// Dodatkowe sprawdzenie dla struktury sandboxa
+			parentEng := filepath.Join(filepath.Dir(dir), "engine")
+			if _, err := os.Stat(filepath.Join(parentEng, "MakerEngine.csproj")); err == nil {
+				return parentEng, filepath.Join(filepath.Dir(dir), "dist")
+			}
+
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+
+		// 3. Fallback dla specyficznych buildów sandboxa (np. editor/build/bin -> root/engine)
+		rootCandidate := filepath.Join(filepath.Dir(exePath), "..", "..", "..", "engine")
+		cleanRoot := filepath.Clean(rootCandidate)
+		if _, err := os.Stat(filepath.Join(cleanRoot, "MakerEngine.csproj")); err == nil {
+			distCandidate := filepath.Join(filepath.Dir(cleanRoot), "dist")
+			return cleanRoot, distCandidate
+		}
+	}
+
+	return "", ""
+}
+
 func (a *App) BuildGame(projectPath string) (string, error) {
 	if projectPath == "" {
 		projectPath = a.projectPath
@@ -30,11 +88,21 @@ func (a *App) BuildGame(projectPath string) (string, error) {
 	if projectPath == "" {
 		return "", fmt.Errorf("brak sciezki projektu")
 	}
+
 	engineRoot, distRoot := a.findEngineRoot()
 	if engineRoot == "" {
-		return "", fmt.Errorf("nie znaleziono folderu engine")
+		return "", fmt.Errorf("nie znaleziono engine/MakerEngine.csproj. Uruchom edytor w katalogu projektu z dostępem do źródeł.")
 	}
-	cmd := silentCmd("dotnet", "publish", "-c", "Release", "-o", distRoot, "-p:StaticWebAssetsCompressContent=false", "-p:StaticWebAssetCompressionMode=None", "-p:PublishTrimmed=false", "-p:BlazorWebAssemblyEnableTrimming=false")
+
+	// Czyszczenie starego folderu dist, aby zapobiec błędom SRI (MakerEngine.wasm integrity check)
+	_ = os.RemoveAll(distRoot)
+
+	cmd := silentCmd("dotnet", "publish", "-c", "Release", "-o", distRoot,
+		"-p:StaticWebAssetsCompressContent=false",
+		"-p:StaticWebAssetCompressionMode=None",
+		"-p:PublishTrimmed=false",
+		"-p:BlazorWebAssemblyEnableTrimming=false",
+	)
 	cmd.Dir = engineRoot
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -74,15 +142,19 @@ func (a *App) BuildExeGame(projectPath string) (string, error) {
 		return "", fmt.Errorf("brak sciezki projektu")
 	}
 	a.projectPath = filepath.Clean(projectPath)
-	
+
 	engineRoot, distRoot := a.findEngineRoot()
 	if engineRoot == "" {
-		return "", fmt.Errorf("nie znaleziono folderu 'engine'. Uruchom edytor w katalogu projektu z dostępem do źródeł.")
+		return "", fmt.Errorf("nie znaleziono engine/MakerEngine.csproj. Uruchom edytor w katalogu projektu z dostępem do źródeł.")
 	}
+
+	// Czyszczenie dist przed nowym buildem
+	_ = os.RemoveAll(distRoot)
 
 	_ = os.MkdirAll(filepath.Join(engineRoot, "wwwroot", "data", "images"), 0755)
 	_ = os.MkdirAll(filepath.Join(engineRoot, "wwwroot", "images"), 0755)
 	_ = os.MkdirAll(filepath.Join(engineRoot, "Assets", "data", "images"), 0755)
+
 	for _, p := range []string{
 		filepath.Join(engineRoot, "wwwroot", "images", "bg_tutorial.webp"),
 		filepath.Join(engineRoot, "Assets", "data", "images", "bg_tutorial.webp"),
@@ -114,7 +186,12 @@ func (a *App) BuildExeGame(projectPath string) (string, error) {
 	_ = silentCmd("taskkill", "/F", "/IM", "MakerEngine.exe").Run()
 	time.Sleep(300 * time.Millisecond)
 
-	cmd := silentCmd("dotnet", "publish", "-c", "Release", "-o", distRoot, "-p:StaticWebAssetsCompressContent=false", "-p:StaticWebAssetCompressionMode=None", "-p:PublishTrimmed=false", "-p:BlazorWebAssemblyEnableTrimming=false")
+	cmd := silentCmd("dotnet", "publish", "-c", "Release", "-o", distRoot,
+		"-p:StaticWebAssetsCompressContent=false",
+		"-p:StaticWebAssetCompressionMode=None",
+		"-p:PublishTrimmed=false",
+		"-p:BlazorWebAssemblyEnableTrimming=false",
+	)
 	cmd.Dir = engineRoot
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("dotnet publish failed (sprawdź czy masz zainstalowane .NET SDK): %w", err)
@@ -457,17 +534,17 @@ func (a *App) BuildPublicPack(projectPath string) (string, error) {
 	}
 	projectPath = filepath.Clean(projectPath)
 	a.projectPath = projectPath
-	
+
 	engineRoot, distRoot := a.findEngineRoot()
 	if engineRoot == "" {
-		return "", fmt.Errorf("nie znaleziono folderu engine")
+		return "", fmt.Errorf("nie znaleziono engine/MakerEngine.csproj. Uruchom edytor w katalogu projektu z dostępem do źródeł.")
 	}
-	
+
 	os.MkdirAll(distRoot, 0755)
 	_ = os.MkdirAll(filepath.Join(engineRoot, "wwwroot", "data", "images"), 0755)
 	_ = os.MkdirAll(filepath.Join(engineRoot, "wwwroot", "images"), 0755)
 	_ = os.MkdirAll(filepath.Join(engineRoot, "Assets", "data", "images"), 0755)
-	
+
 	for _, p := range []string{
 		filepath.Join(engineRoot, "wwwroot", "images", "bg_tutorial.webp"),
 		filepath.Join(engineRoot, "wwwroot", "data", "images", "bg_tutorial.webp"),
@@ -501,7 +578,12 @@ func (a *App) BuildPublicPack(projectPath string) (string, error) {
 		}
 	}
 
-	cmd := silentCmd("dotnet", "publish", "-c", "Release", "-o", distRoot, "-p:StaticWebAssetsCompressContent=false", "-p:StaticWebAssetCompressionMode=None", "-p:PublishTrimmed=false", "-p:BlazorWebAssemblyEnableTrimming=false")
+	cmd := silentCmd("dotnet", "publish", "-c", "Release", "-o", distRoot,
+		"-p:StaticWebAssetsCompressContent=false",
+		"-p:StaticWebAssetCompressionMode=None",
+		"-p:PublishTrimmed=false",
+		"-p:BlazorWebAssemblyEnableTrimming=false",
+	)
 	cmd.Dir = engineRoot
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("dotnet publish failed: %w", err)
@@ -513,7 +595,7 @@ func (a *App) BuildPublicPack(projectPath string) (string, error) {
 	}
 	dstData := filepath.Join(distRoot, "wwwroot", "data")
 	os.MkdirAll(dstData, 0755)
-	
+
 	filepath.Walk(srcData, func(p string, info fs.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
@@ -552,16 +634,16 @@ func (a *App) BuildPublicPack(projectPath string) (string, error) {
 	timestamp := time.Now().Format("20060102-1504")
 	downloads := getDownloadsFolder()
 	os.MkdirAll(downloads, 0755)
-	
+
 	finalZip := filepath.Join(downloads, fmt.Sprintf("%s-PUBLIC-%s.zip", safeName, timestamp))
-	
+
 	zf, err := os.Create(finalZip)
 	if err != nil {
 		return "", err
 	}
 	zw := zip.NewWriter(zf)
 	wwwrootPath := filepath.Join(distRoot, "wwwroot")
-	
+
 	filepath.Walk(wwwrootPath, func(p string, info fs.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
