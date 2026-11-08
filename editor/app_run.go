@@ -5,6 +5,8 @@ import (
         "io/fs"
         "os"
         "os/exec"
+        "context"
+        "net/http"
         "path/filepath"
         "strings"
         "syscall"
@@ -12,6 +14,8 @@ import (
 
         "github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+var parkietServer *http.Server
 
 // Pomocnicza funkcja ukrywająca okno CMD na Windowsie
 func hideWindow(cmd *exec.Cmd) *exec.Cmd {
@@ -33,6 +37,71 @@ func (a *App) RunGame(projectPath string) error {
         hideWindow(exec.Command("taskkill", "/F", "/IM", "dotnet.exe")).Run()
         hideWindow(exec.Command("cmd", "/C", "for /f \"tokens=5\" %a in ('netstat -aon ^| findstr :5020') do taskkill /F /PID %a")).Run()
         time.Sleep(500 * time.Millisecond)
+
+        // 2. PUBLISHED - KROK 4: jak jest gotowy silnik obok exe, nie budujemy dotnetem.
+        // Serwujemy gotowy wwwroot z engine-publish przez Go http server na :5020.
+        if pub := a.findPublishedEngine(); pub != "" {
+                if parkietServer != nil {
+                        _ = parkietServer.Shutdown(context.Background())
+                        parkietServer = nil
+                }
+                srcWww := filepath.Join(pub, "wwwroot")
+                if _, err := os.Stat(srcWww); err != nil {
+                        srcWww = pub
+                }
+                runWww := filepath.Join(os.TempDir(), "KimonoGM", "run-wwwroot")
+                _ = os.RemoveAll(runWww)
+                _ = os.MkdirAll(runWww, 0755)
+                if err := copyDir(srcWww, runWww); err != nil {
+                        return fmt.Errorf("kopiowanie wwwroot z engine-publish: %w", err)
+                }
+                srcDataPub := filepath.Join(projectPath, "Data")
+                if _, err := os.Stat(srcDataPub); os.IsNotExist(err) {
+                        srcDataPub = projectPath
+                }
+                dstDataPub := filepath.Join(runWww, "data")
+                _ = os.MkdirAll(dstDataPub, 0755)
+                _ = os.MkdirAll(filepath.Join(dstDataPub, "images"), 0755)
+                _ = os.MkdirAll(filepath.Join(runWww, "images"), 0755)
+                filepath.Walk(srcDataPub, func(pth string, info fs.FileInfo, err error) error {
+                        if err != nil || info.IsDir() {
+                                return nil
+                        }
+                        if strings.HasSuffix(strings.ToLower(info.Name()), ".json") {
+                                b, _ := os.ReadFile(pth)
+                                _ = os.WriteFile(filepath.Join(dstDataPub, info.Name()), b, 0644)
+                        }
+                        return nil
+                })
+                if files, err := os.ReadDir(projectPath); err == nil {
+                        for _, f := range files {
+                                if !f.IsDir() && strings.HasSuffix(strings.ToLower(f.Name()), ".janproj") {
+                                        b, _ := os.ReadFile(filepath.Join(projectPath, f.Name()))
+                                        _ = os.WriteFile(filepath.Join(dstDataPub, "project.janproj"), b, 0644)
+                                        _ = os.WriteFile(filepath.Join(runWww, "project.janproj"), b, 0644)
+                                }
+                        }
+                }
+                srcImgPub := filepath.Join(projectPath, "images")
+                if _, err := os.Stat(srcImgPub); err == nil {
+                        filepath.Walk(srcImgPub, func(pth string, info fs.FileInfo, err error) error {
+                                if err != nil || info.IsDir() {
+                                        return nil
+                                }
+                                b, _ := os.ReadFile(pth)
+                                _ = os.WriteFile(filepath.Join(runWww, "images", info.Name()), b, 0644)
+                                _ = os.WriteFile(filepath.Join(dstDataPub, "images", info.Name()), b, 0644)
+                                return nil
+                        })
+                }
+                mux := http.NewServeMux()
+                mux.Handle("/", http.FileServer(http.Dir(runWww)))
+                parkietServer = &http.Server{Addr: "127.0.0.1:5020", Handler: mux}
+                go func() { _ = parkietServer.ListenAndServe() }()
+                time.Sleep(500 * time.Millisecond)
+                runtime.LogInfo(a.ctx, "[PARKIET] Serwuje gotowy wwwroot z engine-publish na http://localhost:5020")
+                return nil
+        }
 
         // 2. FIND ENGINE
         engineRoot, _ := a.findEngineRoot()

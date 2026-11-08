@@ -54,6 +54,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path bundle | Out-Null
           Copy-Item editor/build/bin/KimonoGM.exe bundle/
+          Copy-Item editor/build/windows/icon.ico bundle/icon.ico -ErrorAction SilentlyContinue
           Copy-Item -Recurse engine-publish bundle/engine-publish
           Compress-Archive -Path bundle/* -DestinationPath KimonoGM-bundle.zip -Force
         shell: pwsh
