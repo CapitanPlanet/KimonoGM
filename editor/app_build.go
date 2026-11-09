@@ -82,59 +82,58 @@ func (a *App) findEngineRoot() (string, string) {
 	return "", ""
 }
 
-
 // findPublishedEngine szuka GOTOWEGO silnika z CI, nie zrodel.
 // Zwraca folder, w ktorym jest wwwroot/ z index.html, albo "" jak nie ma.
 // Szuka tylko obok exe: ./engine-publish
 func (a *App) findPublishedEngine() string {
-    if exePath, err := os.Executable(); err == nil {
-        exeDir := filepath.Dir(exePath)
-        for _, cand := range []string{
-            filepath.Join(exeDir, "engine-publish"),
-            filepath.Join(exeDir, "engine-publish", "wwwroot"),
-        } {
-            if _, err := os.Stat(filepath.Join(cand, "wwwroot", "index.html")); err == nil {
-                return cand
-            }
-            if _, err := os.Stat(filepath.Join(cand, "index.html")); err == nil {
-                return cand
-            }
-        }
-    }
-    return ""
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		for _, cand := range []string{
+			filepath.Join(exeDir, "engine-publish"),
+			filepath.Join(exeDir, "engine-publish", "wwwroot"),
+		} {
+			if _, err := os.Stat(filepath.Join(cand, "wwwroot", "index.html")); err == nil {
+				return cand
+			}
+			if _, err := os.Stat(filepath.Join(cand, "index.html")); err == nil {
+				return cand
+			}
+		}
+	}
+	return ""
 }
 
 // copyDir kopiuje caly folder rekurencyjnie (pliki + podfoldery)
 func copyDir(src, dst string) error {
-    return filepath.Walk(src, func(path string, info fs.FileInfo, err error) error {
-        if err != nil {
-            return err
-        }
-        rel, _ := filepath.Rel(src, path)
-        target := filepath.Join(dst, rel)
-        if info.IsDir() {
-            return os.MkdirAll(target, 0755)
-        }
-        if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-            return err
-        }
-        b, err := os.ReadFile(path)
-        if err != nil {
-            return err
-        }
-        return os.WriteFile(target, b, 0644)
-    })
+	return filepath.Walk(src, func(path string, info fs.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(src, path)
+		target := filepath.Join(dst, rel)
+		if info.IsDir() {
+			return os.MkdirAll(target, 0755)
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			return err
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, b, 0644)
+	})
 }
 
 // prepareEngineFromPublished kopiuje gotowy silnik do tempa i zwraca
 // engineRoot (kopia robocza) + distRoot. Nie rusza oryginalnego engine-publish.
 func (a *App) prepareEngineFromPublished(published string) (string, string) {
-    tmpEngine := filepath.Join(os.TempDir(), "KimonoGM", "engine-work")
-    _ = os.RemoveAll(tmpEngine)
-    _ = os.MkdirAll(tmpEngine, 0755)
-    _ = copyDir(published, tmpEngine)
-    distRoot := filepath.Join(os.TempDir(), "KimonoGM", "dist")
-    return tmpEngine, distRoot
+	tmpEngine := filepath.Join(os.TempDir(), "KimonoGM", "engine-work")
+	_ = os.RemoveAll(tmpEngine)
+	_ = os.MkdirAll(tmpEngine, 0755)
+	_ = copyDir(published, tmpEngine)
+	distRoot := filepath.Join(os.TempDir(), "KimonoGM", "dist")
+	return tmpEngine, distRoot
 }
 
 func (a *App) BuildGame(projectPath string) (string, error) {
@@ -193,6 +192,27 @@ func getNextExeName(downloads, safeName string) (string, string) {
 		}
 	}
 	return filepath.Join(downloads, fmt.Sprintf("%s_v%d.exe", safeName, time.Now().Unix())), fmt.Sprintf("_v%d", time.Now().Unix())
+}
+
+// findLauncherTemplate szuka gotowego Launcher.exe z paczki CI obok edytora.
+// Nie wola dotnet, tylko zwraca sciezke albo "" jak go nie ma.
+func findLauncherTemplate() string {
+	candidates := []string{}
+	if ep, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(ep)
+		candidates = append(candidates, filepath.Join(exeDir, "Launcher.exe"))
+		candidates = append(candidates, filepath.Join(filepath.Dir(exeDir), "Launcher.exe"))
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		candidates = append(candidates, filepath.Join(cwd, "Launcher.exe"))
+	}
+	candidates = append(candidates, "Launcher.exe")
+	for _, c := range candidates {
+		if info, err := os.Stat(c); err == nil && !info.IsDir() && info.Size() > 1000000 {
+			return c
+		}
+	}
+	return ""
 }
 
 func (a *App) BuildExeGame(projectPath string) (string, error) {
@@ -563,6 +583,34 @@ class Program {
 	zw.Close()
 	zf.Close()
 
+	// KROK 5: jak jest gotowy Launcher.exe obok edytora (z paczki CI), nie wolamy dotnet.
+	// Bierzemy szablon i tylko doklejamy do niego prawdziwy wwwroot.zip.
+	// Szablon jest w bundle: D:\\KimonoGM-bundle\\Launcher.exe obok KimonoGM.exe
+	// v1: gra to 2 pliki w Pobranych: q.exe + wwwroot.zip obok niego.
+	// Launcher szuka wwwroot.zip w BaseDirectory (FindWwwrootZip), wiec go znajdzie.
+	// Ograniczenie v1: jak zbudujesz 2 gry do tego samego folderu, to druga nadpisze wwwroot.zip.
+	// Single-file append (1 plik) to nastepny krok, wymaga tez zmiany w Launcher/Program.cs.
+	if tmpl := findLauncherTemplate(); tmpl != "" {
+		b, err := os.ReadFile(tmpl)
+		if err != nil {
+			return "", fmt.Errorf("nie moge odczytac szablonu Launcher.exe z %s: %w", tmpl, err)
+		}
+		if err := os.WriteFile(finalExe, b, 0644); err != nil {
+			return "", err
+		}
+		// Prawdziwy wwwroot.zip obok finalExe (w Pobranych) - Launcher go znajdzie przez FindWwwrootZip
+		dstZip := filepath.Join(filepath.Dir(finalExe), "wwwroot.zip")
+		zb, err := os.ReadFile(zipPath)
+		if err != nil {
+			return "", fmt.Errorf("nie moge odczytac wwwroot.zip: %w", err)
+		}
+		if err := os.WriteFile(dstZip, zb, 0644); err != nil {
+			return "", err
+		}
+		_ = silentCmd("explorer", "/select,", finalExe).Start()
+		return finalExe, nil
+	}
+
 	tmpOut := filepath.Join(os.TempDir(), "kimono_launcher_publish")
 	os.RemoveAll(tmpOut)
 
@@ -575,7 +623,9 @@ class Program {
 			_ = os.WriteFile(filepath.Join(home, "Desktop", "kimono_launcher.log"), launcherOut.Bytes(), 0644)
 		}
 		msg := launcherOut.String()
-		if len(msg) > 2000 { msg = msg[len(msg)-2000:] }
+		if len(msg) > 2000 {
+			msg = msg[len(msg)-2000:]
+		}
 		return "", fmt.Errorf("launcher publish failed: %w\n--- dotnet log ---\n%s", err, msg)
 	}
 
