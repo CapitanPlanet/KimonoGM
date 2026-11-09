@@ -1,8 +1,10 @@
 using System;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.WinForms;
 using Microsoft.Web.WebView2.Core;
@@ -34,6 +36,7 @@ class Program {
             Path.Combine(AppContext.BaseDirectory, "wwwroot.zip"),
             Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "wwwroot.zip"),
             Path.Combine(Directory.GetCurrentDirectory(), "wwwroot.zip"),
+            Path.Combine(Path.GetTempPath(), "KimonoGM", "wwwroot.zip"),
         };
         foreach (var p in candidates) if (File.Exists(p)) return p;
         try {
@@ -79,6 +82,7 @@ class Program {
             var fallback = new[] {
                 Path.Combine(AppContext.BaseDirectory, "wwwroot"),
                 Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "wwwroot"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "wwwroot"),
             };
             foreach (var c in fallback) {
                 if (File.Exists(Path.Combine(c, "index.html"))) { wwwroot = c; break; }
@@ -100,7 +104,7 @@ class Program {
         http.Prefixes.Add($"http://localhost:{port}/");
         http.Start();
 
-        System.Threading.ThreadPool.QueueUserWorkItem(_ => {
+        ThreadPool.QueueUserWorkItem(_ => {
             while (http.IsListening) {
                 try {
                     var ctx = http.GetContext();
@@ -109,6 +113,9 @@ class Program {
                     if (string.IsNullOrEmpty(urlPath)) urlPath = "index.html";
                     var filePath = Path.GetFullPath(Path.Combine(wwwroot, urlPath.Replace('/', Path.DirectorySeparatorChar)));
                     if (!filePath.StartsWith(Path.GetFullPath(wwwroot), StringComparison.OrdinalIgnoreCase)) {
+                        filePath = Path.Combine(wwwroot, "index.html");
+                    }
+                    if (!File.Exists(filePath) && !urlPath.Contains(".")) {
                         filePath = Path.Combine(wwwroot, "index.html");
                     }
                     if (File.Exists(filePath)) {
@@ -129,6 +136,7 @@ class Program {
 
         var baseDir = AppContext.BaseDirectory;
         var iconPath = Path.Combine(baseDir, "icon.ico");
+        if (!File.Exists(iconPath)) iconPath = Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "icon.ico");
         System.Drawing.Icon icon = null;
         if (File.Exists(iconPath)) { try { icon = new System.Drawing.Icon(iconPath); } catch {} }
 
