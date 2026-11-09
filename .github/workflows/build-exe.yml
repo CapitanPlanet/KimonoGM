@@ -27,42 +27,74 @@ jobs:
         with:
           node-version: '22'
 
-      # === NOWE - Krok 3a: silnik budujemy RAZ, w CI, nie u użytkownika ===
-      - name: Setup .NET
+      - name: Set up .NET 8 SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
-
-      - name: Publish Engine (gotowy silnik, bez zrodel)
-        run: |
-          cd engine
-          dotnet workload install wasm-tools
-          dotnet publish -c Release -o ../engine-publish -p:PublishTrimmed=false -p:BlazorWebAssemblyEnableTrimming=false -p:StaticWebAssetsCompressContent=false
-        shell: pwsh
+          dotnet-version: '8.0.x'
 
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Publish engine once (CI)
+        run: |
+          dotnet publish engine/MakerEngine.csproj -c Release -o engine-publish -p:StaticWebAssetsCompressContent=false -p:StaticWebAssetCompressionMode=None -p:PublishTrimmed=false -p:BlazorWebAssemblyEnableTrimming=false
 
       - name: Build Wails App (.exe)
         run: |
           cd editor
           wails build -clean -ldflags "-H=windowsgui"
 
-      # === NOWE - paczka, nie samo exe ===
-      # To naprawia sandbox: edytor dostaje gotowy silnik obok siebie
-      - name: Pack bundle (exe + engine-publish)
+      - name: Build Launcher template once (CI)
+        shell: pwsh
+        run: |
+          # Krok 5: Launcher budowany RAZ w CI, nie u uzytkownika.
+          # To jest pusty szablon - bez wwwroot.zip w srodku.
+          # Edytor pozniej tylko doklei do niego wwwroot.zip.
+          $launcherDir = "Launcher"
+          New-Item -ItemType Directory -Force -Path $launcherDir | Out-Null
+          # Jezeli w repo nie ma Launcher.csproj, utworz go z tego samego szablonu co edytor
+          if (-not (Test-Path "$launcherDir/Launcher.csproj")) {
+            @'
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <OutputType>WinExe</OutputType>
+              <TargetFramework>net8.0-windows</TargetFramework>
+              <UseWindowsForms>true</UseWindowsForms>
+              <ImplicitUsings>enable</ImplicitUsings>
+              <PublishSingleFile>true</PublishSingleFile>
+              <SelfContained>true</SelfContained>
+              <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+              <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+              <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+            </PropertyGroup>
+            <ItemGroup>
+              <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2739.15" />
+            </ItemGroup>
+          </Project>
+          '@ | Set-Content -Path "$launcherDir/Launcher.csproj" -Encoding UTF8
+          }
+          # Pusty wwwroot.zip - zeby publish sie nie wysypal, jak Program.cs go szuka
+          # Szablon ma byc pusty, gra bedzie doklejona przez edytor
+          if (-not (Test-Path "$launcherDir/wwwroot.zip")) {
+            Compress-Archive -Path "$launcherDir/Program.cs" -DestinationPath "$launcherDir/wwwroot.zip" -Force
+          }
+          dotnet publish "$launcherDir/Launcher.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -o Launcher-publish
+          Copy-Item "Launcher-publish/Launcher.exe" -Destination "Launcher.exe" -Force
+
+      - name: Pack KimonoGM-bundle.zip
+        shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path bundle | Out-Null
-          Copy-Item editor/build/bin/KimonoGM.exe bundle/
-          Copy-Item editor/build/windows/icon.ico bundle/icon.ico -ErrorAction SilentlyContinue
-          Copy-Item -Recurse engine-publish bundle/engine-publish
-          Compress-Archive -Path bundle/* -DestinationPath KimonoGM-bundle.zip -Force
-        shell: pwsh
+          Copy-Item "editor/build/bin/KimonoGM.exe" -Destination "bundle/KimonoGM.exe" -Force
+          if (Test-Path "editor/build/windows/icon.ico") { Copy-Item "editor/build/windows/icon.ico" -Destination "bundle/icon.ico" -Force }
+          if (Test-Path "engine-publish") { Copy-Item "engine-publish" -Destination "bundle/engine-publish" -Recurse -Force }
+          if (Test-Path "Launcher.exe") { Copy-Item "Launcher.exe" -Destination "bundle/Launcher.exe" -Force }
+          Compress-Archive -Path "bundle/*" -DestinationPath "KimonoGM-bundle.zip" -Force
 
-      - name: Upload bundle as Artifact (backup)
+      - name: Upload EXE as Artifact (backup)
         uses: actions/upload-artifact@v5
         with:
-          name: KimonoGM-windows
+          name: KimonoGM-bundle
           path: KimonoGM-bundle.zip
           if-no-files-found: error
 
@@ -72,6 +104,6 @@ jobs:
           files: KimonoGM-bundle.zip
           tag_name: v1.0.${{ github.run_number }}
           name: "KimonoGM Editor v1.0.${{ github.run_number }}"
-          body: "Automatyczny build desktopowego edytora prosto z gałęzi main! Paczka zawiera edytor + gotowy silnik (engine-publish). Rozpakuj CALA paczke, nie samo exe."
+          body: "Automatyczny build desktopowego edytora prosto z galezi main! Bundle: KimonoGM.exe + icon.ico + engine-publish + Launcher.exe (szablon)."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
