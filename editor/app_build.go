@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"io/fs"
@@ -591,22 +592,38 @@ class Program {
 	// Ograniczenie v1: jak zbudujesz 2 gry do tego samego folderu, to druga nadpisze wwwroot.zip.
 	// Single-file append (1 plik) to nastepny krok, wymaga tez zmiany w Launcher/Program.cs.
 	if tmpl := findLauncherTemplate(); tmpl != "" {
+		// KROK 5 single-file: doklej wwwroot.zip na koniec Launcher.exe + footer [8 bajtow dlugosc][KIMONO01]
+		// Gra to 1 plik, tak jak silnik lubi. Launcher czyta doklejony zip z samego siebie (ReadAppendedZip).
 		b, err := os.ReadFile(tmpl)
 		if err != nil {
 			return "", fmt.Errorf("nie moge odczytac szablonu Launcher.exe z %s: %w", tmpl, err)
 		}
-		if err := os.WriteFile(finalExe, b, 0644); err != nil {
-			return "", err
-		}
-		// Prawdziwy wwwroot.zip obok finalExe (w Pobranych) - Launcher go znajdzie przez FindWwwrootZip
-		dstZip := filepath.Join(filepath.Dir(finalExe), "wwwroot.zip")
 		zb, err := os.ReadFile(zipPath)
 		if err != nil {
 			return "", fmt.Errorf("nie moge odczytac wwwroot.zip: %w", err)
 		}
-		if err := os.WriteFile(dstZip, zb, 0644); err != nil {
+		f, err := os.Create(finalExe)
+		if err != nil {
 			return "", err
 		}
+		if _, err := f.Write(b); err != nil {
+			f.Close()
+			return "", err
+		}
+		if _, err := f.Write(zb); err != nil {
+			f.Close()
+			return "", err
+		}
+		var footer [16]byte
+		binary.LittleEndian.PutUint64(footer[0:8], uint64(len(zb)))
+		copy(footer[8:16], []byte("KIMONO01"))
+		if _, err := f.Write(footer[:]); err != nil {
+			f.Close()
+			return "", err
+		}
+		f.Close()
+		// Nie zostawiaj wwwroot.zip obok - gra to 1 plik, zip jest w srodku exe
+		_ = os.Remove(filepath.Join(filepath.Dir(finalExe), "wwwroot.zip"))
 		_ = silentCmd("explorer", "/select,", finalExe).Start()
 		return finalExe, nil
 	}
