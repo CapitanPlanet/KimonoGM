@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"bytes"
 	"fmt"
 	"io"
 	"io/fs"
@@ -330,30 +331,20 @@ func (a *App) BuildExeGame(projectPath string) (string, error) {
 	safeName := strings.ReplaceAll(gameName, " ", "-")
 	finalExe, _ := getNextExeName(downloads, safeName)
 
-	launcherCandidates := []string{
-		filepath.Join(filepath.Dir(engineRoot), "Launcher", "Launcher.csproj"),
-		filepath.Join(engineRoot, "Launcher", "Launcher.csproj"),
-	}
-	var launcherProj string
-	for _, c := range launcherCandidates {
-		if _, err := os.Stat(c); err == nil {
-			launcherProj = c
-			break
-		}
-	}
-
-	var launcherDir string
-	if launcherProj == "" {
-		launcherDir = filepath.Join(filepath.Dir(engineRoot), "Launcher")
-		_ = os.MkdirAll(launcherDir, 0755)
-		launcherProj = filepath.Join(launcherDir, "Launcher.csproj")
-	} else {
-		launcherDir = filepath.Dir(launcherProj)
-	}
+	// FIX: Launcher ZAWSZE w tempie, NIGDY w repo. Inaczej nadpisuje sledzony Launcher/Program.cs
+	launcherDir := filepath.Join(os.TempDir(), "KimonoGM", "Launcher")
+	_ = os.RemoveAll(launcherDir)
+	_ = os.MkdirAll(launcherDir, 0755)
+	launcherProj := filepath.Join(launcherDir, "Launcher.csproj")
 	_ = os.MkdirAll(launcherDir, 0755)
 	_ = os.Remove(filepath.Join(launcherDir, "Program.cs"))
 
+	exeDirForIcon := ""
+	if ep, eerr := os.Executable(); eerr == nil {
+		exeDirForIcon = filepath.Dir(ep)
+	}
 	for _, ic := range []string{
+		filepath.Join(exeDirForIcon, "icon.ico"),
 		filepath.Join(filepath.Dir(engineRoot), "..", "editor", "build", "windows", "icon.ico"),
 		filepath.Join(engineRoot, "..", "editor", "build", "windows", "icon.ico"),
 		"editor/build/windows/icon.ico",
@@ -575,9 +566,17 @@ class Program {
 	tmpOut := filepath.Join(os.TempDir(), "kimono_launcher_publish")
 	os.RemoveAll(tmpOut)
 
+	var launcherOut bytes.Buffer
 	c := silentCmd("dotnet", "publish", launcherProj, "-c", "Release", "-r", "win-x64", "--self-contained", "true", "-p:PublishSingleFile=true", "-p:IncludeNativeLibrariesForSelfExtract=true", "-p:IncludeAllContentForSelfExtract=true", "-o", tmpOut)
+	c.Stdout = &launcherOut
+	c.Stderr = &launcherOut
 	if err := c.Run(); err != nil {
-		return "", fmt.Errorf("launcher publish failed: %w", err)
+		if home, herr := os.UserHomeDir(); herr == nil {
+			_ = os.WriteFile(filepath.Join(home, "Desktop", "kimono_launcher.log"), launcherOut.Bytes(), 0644)
+		}
+		msg := launcherOut.String()
+		if len(msg) > 2000 { msg = msg[len(msg)-2000:] }
+		return "", fmt.Errorf("launcher publish failed: %w\n--- dotnet log ---\n%s", err, msg)
 	}
 
 	var exePath string
