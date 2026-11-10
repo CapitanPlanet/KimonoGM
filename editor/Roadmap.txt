@@ -1,0 +1,12 @@
+- w readme zrobić ładny header - DONE
+- nie buduje się u innych - IN PROGRESS
+- focus na sceny - ???
+- nie daje się dodawać dni - BUG
+- rozszerzenie grafu - płynne między podglądem a grafem
+- scena się przepina na koniec dnia - FEATURE
+- sceny w grafie powinno dać się przemieszczać
+- nie ma tła na scenie - DONE
+- lepiej tła zapisywać, 1024x1024 przycina - FEATURE
+- muzyka na początu sceny - BUG/FEATURE
+- sprawdź sfx - BUG
+- tła w podglądzie są za małe - BUG

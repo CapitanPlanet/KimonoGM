@@ -39,20 +39,12 @@ jobs:
         run: |
           dotnet publish engine/MakerEngine.csproj -c Release -o engine-publish -p:StaticWebAssetsCompressContent=false -p:StaticWebAssetCompressionMode=None -p:PublishTrimmed=false -p:BlazorWebAssemblyEnableTrimming=false
 
-      - name: Build Wails App (.exe)
-        run: |
-          cd editor
-          wails build -clean -ldflags "-H=windowsgui"
-
       - name: Build Launcher template once (CI)
         shell: pwsh
         run: |
           # Krok 5: Launcher budowany RAZ w CI, nie u uzytkownika.
-          # To jest pusty szablon - bez wwwroot.zip w srodku.
-          # Edytor pozniej tylko doklei do niego wwwroot.zip.
           $launcherDir = "Launcher"
           New-Item -ItemType Directory -Force -Path $launcherDir | Out-Null
-          # Jezeli w repo nie ma Launcher.csproj, utworz go z tego samego szablonu co edytor
           if (-not (Test-Path "$launcherDir/Launcher.csproj")) {
             @'
           <Project Sdk="Microsoft.NET.Sdk">
@@ -73,17 +65,33 @@ jobs:
           </Project>
           '@ | Set-Content -Path "$launcherDir/Launcher.csproj" -Encoding UTF8
           }
-          # Pusty wwwroot.zip - zeby publish sie nie wysypal, jak Program.cs go szuka
-          # Szablon ma byc pusty, gra bedzie doklejona przez edytor
           if (-not (Test-Path "$launcherDir/wwwroot.zip")) {
             Compress-Archive -Path "$launcherDir/Program.cs" -DestinationPath "$launcherDir/wwwroot.zip" -Force
           }
           dotnet publish "$launcherDir/Launcher.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -o Launcher-publish
           Copy-Item "Launcher-publish/Launcher.exe" -Destination "Launcher.exe" -Force
 
-      - name: Pack KimonoGM-bundle.zip
+      - name: Prepare embedded bundle for single-file editor
         shell: pwsh
         run: |
+          # Krok Bundle 1 plik: kopiuj do editor/embedded/ przed wails build
+          # Go wkompiluje to przez //go:embed all:embedded w app_embed.go
+          # Uwaga: embedded/ jest w .gitignore, nie commitujemy go - CI buduje go od nowa za kazdym razem
+          New-Item -ItemType Directory -Force -Path "editor/embedded" | Out-Null
+          if (Test-Path "engine-publish") { Copy-Item "engine-publish" -Destination "editor/embedded/engine-publish" -Recurse -Force }
+          if (Test-Path "Launcher.exe") { Copy-Item "Launcher.exe" -Destination "editor/embedded/Launcher.exe" -Force }
+          if (Test-Path "editor/build/windows/icon.ico") { Copy-Item "editor/build/windows/icon.ico" -Destination "editor/embedded/icon.ico" -Force }
+          Get-ChildItem "editor/embedded" | Select-Object Name, Length
+
+      - name: Build Wails App (.exe) - single file with embedded bundle
+        run: |
+          cd editor
+          wails build -clean -ldflags "-H=windowsgui"
+
+      - name: Pack legacy bundle (backup)
+        shell: pwsh
+        run: |
+          # Na wszelki wypadek trzymamy stary bundle.zip, ale glowna dystrybucja to juz 1 plik KimonoGM.exe
           New-Item -ItemType Directory -Force -Path bundle | Out-Null
           Copy-Item "editor/build/bin/KimonoGM.exe" -Destination "bundle/KimonoGM.exe" -Force
           if (Test-Path "editor/build/windows/icon.ico") { Copy-Item "editor/build/windows/icon.ico" -Destination "bundle/icon.ico" -Force }
@@ -94,16 +102,18 @@ jobs:
       - name: Upload EXE as Artifact (backup)
         uses: actions/upload-artifact@v5
         with:
-          name: KimonoGM-bundle
-          path: KimonoGM-bundle.zip
+          name: KimonoGM-single
+          path: editor/build/bin/KimonoGM.exe
           if-no-files-found: error
 
       - name: Upload to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          files: KimonoGM-bundle.zip
+          files: |
+            editor/build/bin/KimonoGM.exe
+            KimonoGM-bundle.zip
           tag_name: v1.0.${{ github.run_number }}
           name: "KimonoGM Editor v1.0.${{ github.run_number }}"
-          body: "Automatyczny build desktopowego edytora prosto z galezi main! Bundle: KimonoGM.exe + icon.ico + engine-publish + Launcher.exe (szablon)."
+          body: "1 plik KimonoGM.exe (edytor + Launcher + silnik w srodku) + legacy KimonoGM-bundle.zip. Przy pierwszym odpaleniu edytor wypakowuje bundle do %LOCALAPPDATA%/KimonoGM/."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
