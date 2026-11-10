@@ -1,25 +1,29 @@
 package main
 
 import (
-	"embed"
+	"archive/zip"
+	"bytes"
+	_ "embed"
 	"fmt"
-	"io/fs"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-// Krok: Bundle do 1 pliku.
-// Edytor ma wkompilowane w srodku: Launcher.exe + engine-publish + icon.ico
-// Przy pierwszym odpaleniu wypakowuje je do %LOCALAPPDATA%\KimonoGM\
-// Potem juz ich nie wypakowuje, tylko uzywa tych z AppLocal.
-// Dzieki temu dystrybucja to 1 plik KimonoGM.exe, bez bundle.zip obok.
+// Bundle do 1 pliku - wersja ZIP.
+// Edytor ma wkompilowany tylko 1 plik: embedded/bundle.zip
+// (Launcher.exe + engine-publish + icon.ico, spakowane przez CI)
+// Przy pierwszym odpaleniu rozpakowuje go do %LOCALAPPDATA%\KimonoGM\
+// Dzieki temu KimonoGM.exe jest ~80-90 MB, a nie ~200 MB.
+// Dev lokalny: jak nie ma bundle.zip, to zrob pusty dummy bundle.zip w editor/embedded/
+// zeby wails dev sie w ogole zbudowal - pusty zip nie zapisuje markera.
 
-//go:embed all:embedded
-var embeddedBundle embed.FS
+//go:embed embedded/bundle.zip
+var embeddedBundleZip []byte
 
-// embeddedVersion - jak zmienisz silnik / Launcher, podbij to, zeby wymusic ponowne wypakowanie
-const embeddedVersion = "2" // v2: marker nie wystarczy, sprawdzamy tez czy Launcher.exe i engine-publish naprawde istnieja
+// embeddedVersion - podbij jak zmienisz silnik / Launcher, zeby wymusic ponowne wypakowanie
+const embeddedVersion = "3"
 
 func embeddedBaseDir() string {
 	cache, err := os.UserCacheDir() // %LOCALAPPDATA%
@@ -31,65 +35,65 @@ func embeddedBaseDir() string {
 	return filepath.Join(cache, "KimonoGM")
 }
 
-// ensureEmbeddedExtracted wypakowuje wkompilowany bundle do AppLocal, jak go jeszcze nie ma albo jest stara wersja.
-// Zwraca folder AppLocal/KimonoGM, czyli tam gdzie lezy Launcher.exe i engine-publish.
+// ensureEmbeddedExtracted rozpakowuje wkompilowany bundle.zip do AppLocal, jak go jeszcze nie ma albo jest stara wersja.
 func ensureEmbeddedExtracted() (string, error) {
 	base := embeddedBaseDir()
 	marker := filepath.Join(base, "_embedded_ver.txt")
 	if b, err := os.ReadFile(marker); err == nil && strings.TrimSpace(string(b)) == embeddedVersion {
 		// Marker OK, ale sprawdz czy naprawde jest Launcher.exe i engine-publish
-		// Stary bug: lokalny build z pustym embedded/ zapisywal marker "1", a nic nie wypakowal
-		// i potem CI build myslal ze juz jest, a nie bylo nic.
+		// Nie ufamy samemu markerowi - stary bug z pustym embedded/
 		if info, err := os.Stat(filepath.Join(base, "Launcher.exe")); err == nil && !info.IsDir() && info.Size() > 1000000 {
 			if _, err := os.Stat(filepath.Join(base, "engine-publish")); err == nil {
 				return base, nil
 			}
 		}
-		// Marker jest, ale plikow nie ma - wypakuj jeszcze raz, nie ufaj markerowi
 	}
-	// Sprawdz czy w ogole mamy cos wkompilowanego
-	entries, err := fs.ReadDir(embeddedBundle, "embedded")
-	if err != nil || len(entries) == 0 {
-		// Nie ma wkompilowanego bundle - to jest stary build z CI bez embedded, uzywamy plikow obok exe
-		return "", fmt.Errorf("brak wkompilowanego bundle (embedded/)")
+	if len(embeddedBundleZip) == 0 {
+		return "", fmt.Errorf("brak wkompilowanego bundle (embedded/bundle.zip)")
 	}
 	_ = os.MkdirAll(base, 0755)
-	// Wypakuj wszystko z embedded/ do base/
-	err = fs.WalkDir(embeddedBundle, "embedded", func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		rel, _ := filepath.Rel("embedded", p)
-		if rel == "." || rel == "" {
-			return nil
-		}
-		dst := filepath.Join(base, rel)
-		if d.IsDir() {
-			_ = os.MkdirAll(dst, 0755)
-			return nil
-		}
-		b, err := embeddedBundle.ReadFile(p)
-		if err != nil {
-			return nil
-		}
-		_ = os.MkdirAll(filepath.Dir(dst), 0755)
-		_ = os.WriteFile(dst, b, 0644)
-		return nil
-	})
+	zr, err := zip.NewReader(bytes.NewReader(embeddedBundleZip), int64(len(embeddedBundleZip)))
 	if err != nil {
 		return "", err
+	}
+	if len(zr.File) == 0 {
+		// Pusty / dummy bundle.zip z deva lokalnego - nie pisz markera, nie udawaj ze wypakowales
+		// Dev lokalny i tak uzyje zrodel z repo, a nie embeda
+		return "", fmt.Errorf("pusty bundle.zip (dev lokalny, brak wkompilowanego bundle)")
+	}
+	for _, f := range zr.File {
+		dst := filepath.Join(base, filepath.FromSlash(f.Name))
+		if !strings.HasPrefix(dst, base+string(os.PathSeparator)) && dst != base {
+			continue
+		}
+		if f.FileInfo().IsDir() {
+			_ = os.MkdirAll(dst, 0755)
+			continue
+		}
+		_ = os.MkdirAll(filepath.Dir(dst), 0755)
+		rc, err := f.Open()
+		if err != nil {
+			continue
+		}
+		out, err := os.Create(dst)
+		if err != nil {
+			rc.Close()
+			continue
+		}
+		_, _ = io.Copy(out, rc)
+		_ = out.Close()
+		_ = rc.Close()
 	}
 	_ = os.WriteFile(marker, []byte(embeddedVersion), 0644)
 	return base, nil
 }
 
-// tryEmbeddedEngine szuka silnika w AppLocal po wypakowaniu embedded.
+// tryEmbeddedEngine szuka silnika w AppLocal po rozpakowaniu embedded.
 func tryEmbeddedEngine() string {
 	base, err := ensureEmbeddedExtracted()
 	if err != nil || base == "" {
 		return ""
 	}
-	// base/engine-publish/wwwroot/index.html albo base/engine-publish/index.html
 	for _, c := range []string{
 		filepath.Join(base, "engine-publish"),
 		filepath.Join(base, "engine-publish", "wwwroot"),
@@ -98,14 +102,13 @@ func tryEmbeddedEngine() string {
 			return filepath.Join(base, "engine-publish")
 		}
 	}
-	// Jak nie ma index.html, ale jest folder, to i tak zwroc - findPublishedEngine sobie poradzi
 	if _, err := os.Stat(filepath.Join(base, "engine-publish")); err == nil {
 		return filepath.Join(base, "engine-publish")
 	}
 	return ""
 }
 
-// tryEmbeddedLauncher szuka Launcher.exe w AppLocal po wypakowaniu embedded.
+// tryEmbeddedLauncher szuka Launcher.exe w AppLocal po rozpakowaniu embedded.
 func tryEmbeddedLauncher() string {
 	base, err := ensureEmbeddedExtracted()
 	if err != nil || base == "" {

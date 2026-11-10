@@ -71,19 +71,24 @@ jobs:
           dotnet publish "$launcherDir/Launcher.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -o Launcher-publish
           Copy-Item "Launcher-publish/Launcher.exe" -Destination "Launcher.exe" -Force
 
-      - name: Prepare embedded bundle for single-file editor
+      - name: Prepare embedded bundle.zip for single-file editor
         shell: pwsh
         run: |
-          # Krok Bundle 1 plik: kopiuj do editor/embedded/ przed wails build
-          # Go wkompiluje to przez //go:embed all:embedded w app_embed.go
-          # Uwaga: embedded/ jest w .gitignore, nie commitujemy go - CI buduje go od nowa za kazdym razem
+          # Pakowanie edytora - wersja ZIP. Male kroczki.
+          # CI robi 1 plik bundle.zip (Launcher + engine-publish + icon.ico)
+          # Go wkompilowuje tylko ten 1 plik przez //go:embed embedded/bundle.zip
+          # Edytor przy pierwszym odpaleniu rozpakowuje go do %LOCALAPPDATA%/KimonoGM/
+          # Uwaga: embedded/ jest w .gitignore, nie commitujemy go - CI buduje go od nowa
           New-Item -ItemType Directory -Force -Path "editor/embedded" | Out-Null
-          if (Test-Path "engine-publish") { Copy-Item "engine-publish" -Destination "editor/embedded/engine-publish" -Recurse -Force }
-          if (Test-Path "Launcher.exe") { Copy-Item "Launcher.exe" -Destination "editor/embedded/Launcher.exe" -Force }
-          if (Test-Path "editor/build/windows/icon.ico") { Copy-Item "editor/build/windows/icon.ico" -Destination "editor/embedded/icon.ico" -Force }
-          Get-ChildItem "editor/embedded" | Select-Object Name, Length
+          New-Item -ItemType Directory -Force -Path "bundle-embedded" | Out-Null
+          if (Test-Path "Launcher.exe") { Copy-Item "Launcher.exe" -Destination "bundle-embedded/Launcher.exe" -Force }
+          if (Test-Path "engine-publish") { Copy-Item "engine-publish" -Destination "bundle-embedded/engine-publish" -Recurse -Force }
+          if (Test-Path "editor/build/windows/icon.ico") { Copy-Item "editor/build/windows/icon.ico" -Destination "bundle-embedded/icon.ico" -Force }
+          # Compress-Archive z -CompressionLevel Optimal - sporo mniej zajmuje niz pliki na pale
+          Compress-Archive -Path "bundle-embedded/*" -DestinationPath "editor/embedded/bundle.zip" -CompressionLevel Optimal -Force
+          Get-Item "editor/embedded/bundle.zip" | Select-Object Name, Length
 
-      - name: Build Wails App (.exe) - single file with embedded bundle
+      - name: Build Wails App (.exe) - single file with embedded bundle.zip
         run: |
           cd editor
           wails build -clean -ldflags "-H=windowsgui"
@@ -91,7 +96,6 @@ jobs:
       - name: Pack legacy bundle (backup)
         shell: pwsh
         run: |
-          # Na wszelki wypadek trzymamy stary bundle.zip, ale glowna dystrybucja to juz 1 plik KimonoGM.exe
           New-Item -ItemType Directory -Force -Path bundle | Out-Null
           Copy-Item "editor/build/bin/KimonoGM.exe" -Destination "bundle/KimonoGM.exe" -Force
           if (Test-Path "editor/build/windows/icon.ico") { Copy-Item "editor/build/windows/icon.ico" -Destination "bundle/icon.ico" -Force }
@@ -114,6 +118,6 @@ jobs:
             KimonoGM-bundle.zip
           tag_name: v1.0.${{ github.run_number }}
           name: "KimonoGM Editor v1.0.${{ github.run_number }}"
-          body: "1 plik KimonoGM.exe (edytor + Launcher + silnik w srodku) + legacy KimonoGM-bundle.zip. Przy pierwszym odpaleniu edytor wypakowuje bundle do %LOCALAPPDATA%/KimonoGM/."
+          body: "1 plik KimonoGM.exe (edytor + bundle.zip w srodku, rozpakowuje do %LOCALAPPDATA%/KimonoGM/) + legacy KimonoGM-bundle.zip."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
