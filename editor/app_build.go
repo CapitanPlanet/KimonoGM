@@ -87,6 +87,12 @@ func (a *App) findEngineRoot() (string, string) {
 // Zwraca folder, w ktorym jest wwwroot/ z index.html, albo "" jak nie ma.
 // Szuka tylko obok exe: ./engine-publish
 func (a *App) findPublishedEngine() string {
+	// Krok 3 Bundle 1 plik: najpierw AppLocal z wkompilowanego bundle (embedded)
+	// Jak edytor to 1 plik KimonoGM.exe, to silnik jest w %LOCALAPPDATA%\KimonoGM\engine-publish
+	// Jak nie ma embedded (stary build z bundle.zip), to spada do szukania obok exe
+	if emb := tryEmbeddedEngine(); emb != "" {
+		return emb
+	}
 	if exePath, err := os.Executable(); err == nil {
 		exeDir := filepath.Dir(exePath)
 		for _, cand := range []string{
@@ -138,6 +144,9 @@ func (a *App) prepareEngineFromPublished(published string) (string, string) {
 }
 
 func (a *App) BuildGame(projectPath string) (string, error) {
+	// Krok 3 Bundle 1 plik: najpierw wypakuj wkompilowany bundle do AppLocal (jak jest)
+	// Bez tego BuildGame (podglad) nie widzial silnika na wirtualce, bo nikt go nie wypakowal
+	_, _ = ensureEmbeddedExtracted()
 	if projectPath == "" {
 		projectPath = a.projectPath
 	}
@@ -153,7 +162,7 @@ func (a *App) BuildGame(projectPath string) (string, error) {
 	} else {
 		engineRoot, distRoot = a.findEngineRoot()
 		if engineRoot == "" {
-			return "", fmt.Errorf("nie znaleziono engine/MakerEngine.csproj. Uruchom edytor w katalogu projektu z dostępem do źródeł.")
+			return "", fmt.Errorf("nie znaleziono silnika (ani w AppLocal, ani engine-publish obok exe, ani engine/MakerEngine.csproj). Sciagnij KimonoGM.exe z Releases (1 plik z wkompilowanym silnikiem), a nie lokalny build, albo uruchom edytor w katalogu repo ze zrodlami.")
 		}
 	}
 
@@ -198,6 +207,10 @@ func getNextExeName(downloads, safeName string) (string, string) {
 // findLauncherTemplate szuka gotowego Launcher.exe z paczki CI obok edytora.
 // Nie wola dotnet, tylko zwraca sciezke albo "" jak go nie ma.
 func findLauncherTemplate() string {
+	// Krok 3 Bundle 1 plik: najpierw AppLocal z wkompilowanego bundle
+	if emb := tryEmbeddedLauncher(); emb != "" {
+		return emb
+	}
 	candidates := []string{}
 	if ep, err := os.Executable(); err == nil {
 		exeDir := filepath.Dir(ep)
@@ -233,6 +246,9 @@ func (a *App) BuildExeGame(projectPath string) (string, error) {
 	}
 	a.projectPath = filepath.Clean(projectPath)
 
+	// Krok 3: przy pierwszym odpaleniu wypakuj wkompilowany bundle do AppLocal (jak jest)
+	_, _ = ensureEmbeddedExtracted()
+
 	// KROK 4: najpierw sprobuj gotowy silnik z CI (engine-publish obok exe).
 	// Jak jest - nie szukamy zrodel, nie wolamy dotnet publish dla silnika.
 	// Jak nie ma - stary sposob dev (zrodla + dotnet).
@@ -244,7 +260,7 @@ func (a *App) BuildExeGame(projectPath string) (string, error) {
 	} else {
 		engineRoot, distRoot = a.findEngineRoot()
 		if engineRoot == "" {
-			return "", fmt.Errorf("nie znaleziono engine/MakerEngine.csproj. Uruchom edytor w katalogu projektu z dostępem do źródeł.")
+			return "", fmt.Errorf("nie znaleziono silnika (ani w AppLocal, ani engine-publish obok exe, ani engine/MakerEngine.csproj). Sciagnij KimonoGM.exe z Releases (1 plik z wkompilowanym silnikiem), a nie lokalny build, albo uruchom edytor w katalogu repo ze zrodlami.")
 		}
 	}
 
@@ -672,6 +688,8 @@ class Program {
 }
 
 func (a *App) BuildPublicPack(projectPath string) (string, error) {
+	// Krok 3 Bundle 1 plik: najpierw wypakuj wkompilowany bundle do AppLocal (jak jest)
+	_, _ = ensureEmbeddedExtracted()
 	// Awaryjna ochrona przed awarią
 	defer func() {
 		if r := recover(); r != nil {
@@ -697,7 +715,7 @@ func (a *App) BuildPublicPack(projectPath string) (string, error) {
 	} else {
 		engineRoot, distRoot = a.findEngineRoot()
 		if engineRoot == "" {
-			return "", fmt.Errorf("nie znaleziono engine/MakerEngine.csproj. Uruchom edytor w katalogu projektu z dostępem do źródeł.")
+			return "", fmt.Errorf("nie znaleziono silnika (ani w AppLocal, ani engine-publish obok exe, ani engine/MakerEngine.csproj). Sciagnij KimonoGM.exe z Releases (1 plik z wkompilowanym silnikiem), a nie lokalny build, albo uruchom edytor w katalogu repo ze zrodlami.")
 		}
 	}
 
