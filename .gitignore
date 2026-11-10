@@ -5,6 +5,8 @@ engine-publish/
 **/bin/
 **/obj/
 **/node_modules/
+editor/embedded/*
+!editor/embedded/bundle.zip
 
 # Lokalne buildy - CI i tak wrzuca exe do Release, gitignore tego nie blokuje
 *.exe
