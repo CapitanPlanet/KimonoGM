@@ -19,7 +19,7 @@ import (
 var embeddedBundle embed.FS
 
 // embeddedVersion - jak zmienisz silnik / Launcher, podbij to, zeby wymusic ponowne wypakowanie
-const embeddedVersion = "1"
+const embeddedVersion = "2" // v2: marker nie wystarczy, sprawdzamy tez czy Launcher.exe i engine-publish naprawde istnieja
 
 func embeddedBaseDir() string {
 	cache, err := os.UserCacheDir() // %LOCALAPPDATA%
@@ -37,8 +37,15 @@ func ensureEmbeddedExtracted() (string, error) {
 	base := embeddedBaseDir()
 	marker := filepath.Join(base, "_embedded_ver.txt")
 	if b, err := os.ReadFile(marker); err == nil && strings.TrimSpace(string(b)) == embeddedVersion {
-		// Juz wypakowane, ta sama wersja - nic nie rob
-		return base, nil
+		// Marker OK, ale sprawdz czy naprawde jest Launcher.exe i engine-publish
+		// Stary bug: lokalny build z pustym embedded/ zapisywal marker "1", a nic nie wypakowal
+		// i potem CI build myslal ze juz jest, a nie bylo nic.
+		if info, err := os.Stat(filepath.Join(base, "Launcher.exe")); err == nil && !info.IsDir() && info.Size() > 1000000 {
+			if _, err := os.Stat(filepath.Join(base, "engine-publish")); err == nil {
+				return base, nil
+			}
+		}
+		// Marker jest, ale plikow nie ma - wypakuj jeszcze raz, nie ufaj markerowi
 	}
 	// Sprawdz czy w ogole mamy cos wkompilowanego
 	entries, err := fs.ReadDir(embeddedBundle, "embedded")
