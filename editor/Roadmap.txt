@@ -1,8 +1,8 @@
 - w readme zrobić ładny header - DONE
-- nie buduje się u innych - IN PROGRESS
+- nie buduje się u innych - DONE
 - focus na sceny - ???
-- nie daje się dodawać dni - BUG
-- rozszerzenie grafu - płynne między podglądem a grafem
+- nie daje się dodawać dni - DONE
+- rozszerzenie grafu - płynne między podglądem a grafem - IN PROGRESS
 - scena się przepina na koniec dnia - FEATURE
 - sceny w grafie powinno dać się przemieszczać
 - nie ma tła na scenie - DONE

@@ -1,6 +1,7 @@
 
 import type { Scene, Choice } from './types'
 import { genId, fixRelPath, toSafeDayId, isEndDayId } from './utils'
+import { createEmptyDay } from './factory'
 
 export function createSceneActions() {
   return {
@@ -60,10 +61,10 @@ export function createSceneActions() {
       ;(this.currentScene as any)[field]=value
     },
     addDay(this: any, dayId: string){
-      const { toSafeDayId } = require('./utils')
+      // FIX: wczesniej bylo require w srodku funkcji, a require nie istnieje w przegladarce / Wails frontend (ESM)
+      // Dlatego dodawanie dnia klekalo, a kopiowanie dzialalo (kopiowanie nie uzywa require). Teraz importy z gory pliku.
       const safe = toSafeDayId(dayId); if(!safe){ alert('Nieprawidłowa nazwa dnia'); return }
       if(this.days[safe]){ alert(`Dzień "${safe}" już istnieje`); return }
-      const { createEmptyDay } = require('./factory')
       const dayNum = Object.keys(this.days).length+1
       this.days[safe]=createEmptyDay(safe, dayNum, this.statsSystem.stats.map((s:any)=>s.name))
       this.currentDay=safe; this.currentSceneId=this.days[safe][0].Id
