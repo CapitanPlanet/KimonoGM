@@ -25,6 +25,35 @@ const currentAbsurd = computed(() => absurdBadges[absurdIndex.value])
 function cycleAbsurd() { absurdIndex.value = (absurdIndex.value + 1) % absurdBadges.length }
 const isLoaded = computed(() => !!store.meta && !!store.projectPath)
 
+// === SPLITTER graf <-> podglad (IN PROGRESS) ===
+// Graf na gorze, podglad na dole, miedzy nimi przecigana linia.
+// Najezdzasz -> kursor ns-resize (strzalka gora-dol), lapiesz i ciagniesz.
+// Min 180px zeby graf sie nie zwinal do 0, max zeby podglad tez mial min 180px.
+// Zapamietuje w localStorage, zeby po odswiezeniu nie wracalo do 340px.
+const graphHeight = ref(Number(localStorage.getItem('kimono-graph-height') || 340) || 340)
+const isDraggingSplitter = ref(false)
+let dragStartY = 0
+let dragStartH = 340
+function onSplitterDown(e: PointerEvent) {
+  isDraggingSplitter.value = true
+  dragStartY = e.clientY
+  dragStartH = graphHeight.value
+  ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
+  window.addEventListener('pointermove', onSplitterMove)
+  window.addEventListener('pointerup', onSplitterUp, { once: true })
+}
+function onSplitterMove(e: PointerEvent) {
+  if (!isDraggingSplitter.value) return
+  const dy = e.clientY - dragStartY
+  // min 180, max: cala kolumna minus min 180 dla podgladu - liczymy na sztywno 720 max, zeby nie wyjechac poza ekran
+  graphHeight.value = Math.min(720, Math.max(180, dragStartH + dy))
+}
+function onSplitterUp() {
+  isDraggingSplitter.value = false
+  window.removeEventListener('pointermove', onSplitterMove)
+  try { localStorage.setItem('kimono-graph-height', String(Math.round(graphHeight.value))) } catch {}
+}
+
 onMounted(() => { if (!(store as any).currentDayId && (store as any).days?.length) { (store as any).currentDayId = (store as any).days[0].id } })
 async function saveProject() { try { await store.saveProject(); showSavedToast.value = true; setTimeout(() => showSavedToast.value = false, 2000) } catch (e) { alert('Błąd zapisu: ' + e) } }
 async function openFolder() { if (!store.projectPath) return; try { await OpenProjectFolder(store.projectPath) } catch {} }
@@ -97,7 +126,8 @@ async function buildExe() {
       <SceneList class="panel" />
       
       <div class="central-preview-column">
-        <SceneGraph class="panel panel-graph" />
+        <SceneGraph class="panel panel-graph" :style="{ height: graphHeight + 'px' }" />
+        <div class="graph-splitter" :class="{ dragging: isDraggingSplitter }" title="Przeciagnij zeby zmienic wysokosc grafu" @pointerdown="onSplitterDown"><span class="splitter-grip">···</span></div>
         <SceneCanvas class="panel panel-canvas-fill" />
       </div>
       
@@ -141,11 +171,38 @@ body { background:var(--bg); margin:0; color:var(--text); overflow-x:hidden; }
 }
 
 .panel-graph {
-  flex: 0 0 340px;
-  min-height: 0;
+  flex: 0 0 auto;
+  min-height: 180px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.graph-splitter {
+  flex: 0 0 10px;
+  height: 10px;
+  margin: -1px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+  background: transparent;
+  border-radius: 6px;
+  user-select: none;
+  touch-action: none;
+}
+.graph-splitter:hover, .graph-splitter.dragging {
+  background: var(--mustard);
+}
+.splitter-grip {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  line-height: 1;
+  pointer-events: none;
+}
+.graph-splitter:hover .splitter-grip, .graph-splitter.dragging .splitter-grip {
+  color: #000;
 }
 
 .panel-canvas-fill {

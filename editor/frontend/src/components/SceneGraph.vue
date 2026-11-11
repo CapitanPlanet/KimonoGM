@@ -229,7 +229,7 @@ function select(id:string){ store.selectScene(id) }
 </template>
 
 <style scoped>
-.graph-wrap{ background:#0D1117; border:1px solid #21262D; border-bottom:none; border-radius:8px 8px 0 0; display:flex; flex-direction:column; flex-shrink:0; }
+.graph-wrap{ background:#0D1117; border:1px solid #21262D; border-bottom:none; border-radius:8px 8px 0 0; display:flex; flex-direction:column; flex:1; min-height:0; height:100%; }
 .graph-wrap.collapsed{ border-radius:8px; border-bottom:1px solid #21262D; }
 .graph-header{ height:24px; display:flex; align-items:center; gap:6px; padding:0 8px; background:#161B22; border-bottom:1px solid #21262D; cursor:pointer; user-select:none; }
 .g-title{ font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:800; color:#D4A574; }
@@ -239,10 +239,10 @@ function select(id:string){ store.selectScene(id) }
 .zbtn{ width:16px; height:16px; background:#21262D; border:1px solid #30363D; color:#E6EDF3; border-radius:3px; cursor:pointer; font-size:10px; display:grid; place-items:center; }
 .zval{ font-family:'JetBrains Mono',monospace; font-size:7px; color:#7D8590; min-width:24px; text-align:center; }
 .g-toggle{ font-family:'JetBrains Mono',monospace; font-size:8px; color:#7D8590; margin-left:4px; }
-.graph-canvas{ position:relative; height:180px; overflow:auto; background:#080A0F; cursor:grab; user-select:none; }
+.graph-canvas{ position:relative; flex:1; min-height:0; height:auto; overflow:auto; background:#080A0F; cursor:grab; user-select:none; display:flex; } /* FIX splitter: wczesniej sztywne height:180px */
 .graph-canvas.dragging{ cursor:grabbing; }
 .graph-canvas::-webkit-scrollbar{ width:5px; height:5px; } .graph-canvas::-webkit-scrollbar-thumb{ background:#21262D; border-radius:3px; }
-.graph-inner{ position:relative; transition: transform 0.15s; padding-left:4px; }
+.graph-inner{ position:relative; transition: transform 0.15s; padding-left:4px; margin:auto; flex-shrink:0; } /* FIX centrowanie: margin:auto w flexowym graph-canvas centruje jak sie miesci, a jak sie nie miesci to przechodzi w przewijanie zamiast blokowac rozszerzanie canvasa */
 .grid-bg{ position:absolute; inset:0; background-image: radial-gradient(#21262D 1px, transparent 1px); background-size:16px 16px; opacity:0.12; pointer-events:none; }
 .edges-layer{ position:absolute; inset:0; pointer-events:none; overflow:visible; }
 .ink-path{ fill:none; stroke-width:1.9px; opacity:0.9; }
