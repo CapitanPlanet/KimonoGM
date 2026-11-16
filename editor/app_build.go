@@ -132,6 +132,77 @@ func copyDir(src, dst string) error {
 	})
 }
 
+// KIMONO FIX v3 - KONIEC RECZNEGO KOPIOWANIA.
+// Problem: janusz-audio.js raz laduje 'sample-3s.mp3', raz 'sounds/sfx/...',
+// raz 'sounds/sounds/sfx/...' (dokleja /sounds/ do sciezki ktora juz go ma).
+// A dane w day1.json sa niespojne. Zamiast naprawiac kazdy zapis, tworzymy
+// plik w KAZDYM miejscu gdzie JS moze go szukac.
+// Dodatkowo: WPUŚĆ NA PARKIET kasuje engine-work i buduje go od nowa z szablonu,
+// wiec kopiowanie tylko do dist/wwwroot nic nie dawalo na podgladzie.
+// Dlatego kopiujemy do: distRoot/wwwroot ORAZ engineRoot/wwwroot (podglad).
+func copyProjectSoundsToAll(projectPath, engineRoot, distRoot string) {
+	srcDir := filepath.Join(projectPath, "sounds")
+	if _, err := os.Stat(srcDir); err != nil {
+		return
+	}
+	// Wszystkie bazy gdzie gra moze szukac dzwieku
+	var bases []string
+	for _, root := range []string{distRoot, engineRoot} {
+		if root == "" {
+			continue
+		}
+		bases = append(bases,
+			filepath.Join(root, "wwwroot"),
+			filepath.Join(root, "wwwroot", "data"),
+		)
+	}
+	// Unikaj duplikatow (jak engineRoot == distRoot)
+	seen := map[string]bool{}
+	uniq := []string{}
+	for _, b := range bases {
+		if !seen[b] {
+			seen[b] = true
+			uniq = append(uniq, b)
+		}
+	}
+	_ = filepath.Walk(srcDir, func(path string, info fs.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		low := strings.ToLower(info.Name())
+		if !(strings.HasSuffix(low, ".mp3") || strings.HasSuffix(low, ".wav") || strings.HasSuffix(low, ".ogg")) {
+			return nil
+		}
+		rel, _ := filepath.Rel(srcDir, path)
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		for _, base := range uniq {
+			// Wariant 1: sounds/sfx/sample-3s.mp3 (poprawna sciezka)
+			// Wariant 2: sounds/sounds/sfx/sample-3s.mp3 (JS dokleja /sounds/ do pelnej sciezki)
+			// Wariant 3: sounds/sample-3s.mp3 (JS dokleja /sounds/ do golej nazwy)
+			// Wariant 4: sample-3s.mp3 luzem w wwwroot (JS laduje gola nazwe)
+			// Wariant 5: data/... - te same warianty w data/
+			targets := []string{
+				filepath.Join(base, "sounds", rel),
+				filepath.Join(base, "sounds", "sounds", rel),
+				filepath.Join(base, "sounds", info.Name()),
+				filepath.Join(base, info.Name()),
+			}
+			for _, t := range targets {
+				_ = os.MkdirAll(filepath.Dir(t), 0755)
+				_ = os.WriteFile(t, b, 0644)
+			}
+		}
+		return nil
+	})
+}
+
+func copyProjectSounds(projectPath, distRoot string) {
+	copyProjectSoundsToAll(projectPath, "", distRoot)
+}
+
 // prepareEngineFromPublished kopiuje gotowy silnik do tempa i zwraca
 // engineRoot (kopia robocza) + distRoot. Nie rusza oryginalnego engine-publish.
 func (a *App) prepareEngineFromPublished(published string) (string, string) {
@@ -168,6 +239,8 @@ func (a *App) BuildGame(projectPath string) (string, error) {
 
 	// Czyszczenie starego folderu dist, aby zapobiec błędom SRI (MakerEngine.wasm integrity check)
 	_ = os.RemoveAll(distRoot)
+	// KIMONO FIX v3: od razu po wyczyszczeniu dorzuc dzwieki do engine-work (podglad je kasuje przy kazdym starcie)
+	copyProjectSoundsToAll(projectPath, engineRoot, distRoot)
 
 	if !usePublished {
 		cmd := silentCmd("dotnet", "publish", "-c", "Release", "-o", distRoot,
@@ -187,6 +260,8 @@ func (a *App) BuildGame(projectPath string) (string, error) {
 			_ = copyDir(filepath.Join(engineRoot, "wwwroot"), filepath.Join(distRoot, "wwwroot"))
 		}
 	}
+	// KIMONO FIX v3: podglad serwuje z engineRoot (engine-work), nie z dist - kopiuj do obu
+	copyProjectSoundsToAll(projectPath, engineRoot, distRoot)
 	return distRoot, nil
 }
 
@@ -363,6 +438,9 @@ func (a *App) BuildExeGame(projectPath string) (string, error) {
 		})
 	}
 
+	// KIMONO FIX v3: EXE + podglad - kopiuj do engineRoot i distRoot, wszystkie warianty sciezek
+	copyProjectSoundsToAll(a.projectPath, engineRoot, distRoot)
+
 	downloads := getDownloadsFolder()
 	gameName := filepath.Base(a.projectPath)
 	safeName := strings.ReplaceAll(gameName, " ", "-")
@@ -445,6 +523,9 @@ class Program {
             ".gif" => "image/gif",
             ".svg" => "image/svg+xml",
             ".wasm" => "application/wasm",
+            ".mp3" => "audio/mpeg",
+            ".wav" => "audio/wav",
+            ".ogg" => "audio/ogg",
             ".woff" => "font/woff",
             ".woff2" => "font/woff2",
             ".ttf" => "font/ttf",
@@ -813,6 +894,9 @@ func (a *App) BuildPublicPack(projectPath string) (string, error) {
 		b, _ := os.ReadFile(filepath.Join(projectPath, "project.janproj"))
 		os.WriteFile(filepath.Join(distRoot, "wwwroot", "project.janproj"), b, 0644)
 	}
+
+	// KIMONO FIX v3: paczka + podglad - kopiuj do engineRoot i distRoot, wszystkie warianty
+	copyProjectSoundsToAll(projectPath, engineRoot, distRoot)
 
 	gameName := filepath.Base(projectPath)
 	safeName := strings.ReplaceAll(gameName, " ", "-")
