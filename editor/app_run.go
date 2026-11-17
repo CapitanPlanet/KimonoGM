@@ -23,14 +23,11 @@ func hideWindow(cmd *exec.Cmd) *exec.Cmd {
 	return cmd
 }
 
-// KIMONO FIX - KONIEC RECZNEGO KOPIOWANIA.
-// RunGame (WPUŚĆ NA PARKIET) buduje od nowa %TEMP%\KimonoGM\run-wwwroot
-// przy kazdym starcie i kopiowal tylko JSON + images. sounds/ nigdy nie bylo kopiowane.
-// Dodatkowo janusz-audio.js raz szuka 'sample-3s.mp3', raz 'sounds/sfx/...',
-// raz 'sounds/sounds/sfx/...' (dokleja /sounds/ do sciezki ktora juz go ma),
-// a dane w day1.json sa niespojne. Dlatego tworzymy plik w KAZDYM miejscu
-// gdzie JS moze go szukac - wtedy kazdy zapis w day1.json zadziala.
-func copySoundsToWwwroot(projectPath, wwwroot string) {
+// FIX exe/localhost: ta sama zasada co w app_build - plik w OBU wariantach,
+// JSON nietkniety. Localhost (published) serwuje z run-wwwroot, dev serwuje
+// z engine/wwwroot -> bin/wwwroot, wiec kopiujemy do wszystkich trzech,
+// w obu wariantach sciezki.
+func copySoundsBothVariants(projectPath, wwwroot string) {
 	srcDir := filepath.Join(projectPath, "sounds")
 	if _, err := os.Stat(srcDir); err != nil {
 		return
@@ -48,18 +45,14 @@ func copySoundsToWwwroot(projectPath, wwwroot string) {
 		if err != nil {
 			return nil
 		}
-		targets := []string{
+		for _, dst := range []string{
 			filepath.Join(wwwroot, "sounds", rel),
 			filepath.Join(wwwroot, "sounds", "sounds", rel),
 			filepath.Join(wwwroot, "sounds", info.Name()),
 			filepath.Join(wwwroot, info.Name()),
-			filepath.Join(wwwroot, "data", "sounds", rel),
-			filepath.Join(wwwroot, "data", "sounds", "sounds", rel),
-			filepath.Join(wwwroot, "data", info.Name()),
-		}
-		for _, t := range targets {
-			_ = os.MkdirAll(filepath.Dir(t), 0755)
-			_ = os.WriteFile(t, b, 0644)
+		} {
+			_ = os.MkdirAll(filepath.Dir(dst), 0755)
+			_ = os.WriteFile(dst, b, 0644)
 		}
 		return nil
 	})
@@ -136,8 +129,8 @@ func (a *App) RunGame(projectPath string) error {
 				return nil
 			})
 		}
-		// KIMONO FIX: podglad tez musi miec sounds/ - kopiuj do run-wwwroot
-		copySoundsToWwwroot(projectPath, runWww)
+		// FIX: dzwieki do run-wwwroot w obu wariantach, przed startem serwera
+		copySoundsBothVariants(projectPath, runWww)
 
 		mux := http.NewServeMux()
 		mux.Handle("/", http.FileServer(http.Dir(runWww)))
@@ -272,10 +265,6 @@ func (a *App) RunGame(projectPath string) error {
 				})
 			}
 		}
-		// KIMONO FIX: dev branch tez musi miec sounds/ we wszystkich wwwroot
-		copySoundsToWwwroot(projectPath, filepath.Join(engineRoot, "wwwroot"))
-		copySoundsToWwwroot(projectPath, filepath.Join(engineRoot, "Assets", "wwwroot"))
-
 		if files, err := os.ReadDir(projectPath); err == nil {
 			for _, f := range files {
 				if f.IsDir() {
@@ -386,6 +375,7 @@ func (a *App) RunGame(projectPath string) error {
 	binWwwroots = append(binWwwroots, filepath.Join(engineRoot, "bin", "Debug", "net8.0", "wwwroot"))
 	seen := map[string]bool{}
 	for _, wr := range binWwwroots {
+		copySoundsBothVariants(projectPath, wr)
 		abs, _ := filepath.Abs(wr)
 		if seen[abs] {
 			continue
@@ -419,9 +409,6 @@ func (a *App) RunGame(projectPath string) error {
 				}
 			}
 		}
-		// KIMONO FIX: bin/wwwroot tez musi miec sounds/
-		copySoundsToWwwroot(projectPath, abs)
-
 		for _, av := range []string{
 			filepath.Join(abs, "images", "av_tutorial.png"),
 			filepath.Join(dataDir, "images", "av_tutorial.png"),
@@ -450,6 +437,9 @@ func (a *App) RunGame(projectPath string) error {
 	prop := fmt.Sprintf("-p:GameAssetsRoot=\"%s\"", strings.ReplaceAll(gp, "\"", ""))
 
 	// Uruchamiamy proces w bezpiecznym trybie bez kompilacji, bez dotykania flag StaticWebAssets
+	// FIX: przed buildem dzwieki do engine/wwwroot w obu wariantach
+	copySoundsBothVariants(projectPath, filepath.Join(engineRoot, "wwwroot"))
+
 	runCmd := hideWindow(exec.Command("dotnet", "run", "--no-build", "--project", enginePath, prop, "--urls", "http://localhost:5020", "--no-launch-profile"))
 
 	runCmd.Dir = engineRoot

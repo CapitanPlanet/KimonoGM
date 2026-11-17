@@ -132,77 +132,6 @@ func copyDir(src, dst string) error {
 	})
 }
 
-// KIMONO FIX v3 - KONIEC RECZNEGO KOPIOWANIA.
-// Problem: janusz-audio.js raz laduje 'sample-3s.mp3', raz 'sounds/sfx/...',
-// raz 'sounds/sounds/sfx/...' (dokleja /sounds/ do sciezki ktora juz go ma).
-// A dane w day1.json sa niespojne. Zamiast naprawiac kazdy zapis, tworzymy
-// plik w KAZDYM miejscu gdzie JS moze go szukac.
-// Dodatkowo: WPUŚĆ NA PARKIET kasuje engine-work i buduje go od nowa z szablonu,
-// wiec kopiowanie tylko do dist/wwwroot nic nie dawalo na podgladzie.
-// Dlatego kopiujemy do: distRoot/wwwroot ORAZ engineRoot/wwwroot (podglad).
-func copyProjectSoundsToAll(projectPath, engineRoot, distRoot string) {
-	srcDir := filepath.Join(projectPath, "sounds")
-	if _, err := os.Stat(srcDir); err != nil {
-		return
-	}
-	// Wszystkie bazy gdzie gra moze szukac dzwieku
-	var bases []string
-	for _, root := range []string{distRoot, engineRoot} {
-		if root == "" {
-			continue
-		}
-		bases = append(bases,
-			filepath.Join(root, "wwwroot"),
-			filepath.Join(root, "wwwroot", "data"),
-		)
-	}
-	// Unikaj duplikatow (jak engineRoot == distRoot)
-	seen := map[string]bool{}
-	uniq := []string{}
-	for _, b := range bases {
-		if !seen[b] {
-			seen[b] = true
-			uniq = append(uniq, b)
-		}
-	}
-	_ = filepath.Walk(srcDir, func(path string, info fs.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
-		}
-		low := strings.ToLower(info.Name())
-		if !(strings.HasSuffix(low, ".mp3") || strings.HasSuffix(low, ".wav") || strings.HasSuffix(low, ".ogg")) {
-			return nil
-		}
-		rel, _ := filepath.Rel(srcDir, path)
-		b, err := os.ReadFile(path)
-		if err != nil {
-			return nil
-		}
-		for _, base := range uniq {
-			// Wariant 1: sounds/sfx/sample-3s.mp3 (poprawna sciezka)
-			// Wariant 2: sounds/sounds/sfx/sample-3s.mp3 (JS dokleja /sounds/ do pelnej sciezki)
-			// Wariant 3: sounds/sample-3s.mp3 (JS dokleja /sounds/ do golej nazwy)
-			// Wariant 4: sample-3s.mp3 luzem w wwwroot (JS laduje gola nazwe)
-			// Wariant 5: data/... - te same warianty w data/
-			targets := []string{
-				filepath.Join(base, "sounds", rel),
-				filepath.Join(base, "sounds", "sounds", rel),
-				filepath.Join(base, "sounds", info.Name()),
-				filepath.Join(base, info.Name()),
-			}
-			for _, t := range targets {
-				_ = os.MkdirAll(filepath.Dir(t), 0755)
-				_ = os.WriteFile(t, b, 0644)
-			}
-		}
-		return nil
-	})
-}
-
-func copyProjectSounds(projectPath, distRoot string) {
-	copyProjectSoundsToAll(projectPath, "", distRoot)
-}
-
 // prepareEngineFromPublished kopiuje gotowy silnik do tempa i zwraca
 // engineRoot (kopia robocza) + distRoot. Nie rusza oryginalnego engine-publish.
 func (a *App) prepareEngineFromPublished(published string) (string, string) {
@@ -239,10 +168,9 @@ func (a *App) BuildGame(projectPath string) (string, error) {
 
 	// Czyszczenie starego folderu dist, aby zapobiec błędom SRI (MakerEngine.wasm integrity check)
 	_ = os.RemoveAll(distRoot)
-	// KIMONO FIX v3: od razu po wyczyszczeniu dorzuc dzwieki do engine-work (podglad je kasuje przy kazdym starcie)
-	copyProjectSoundsToAll(projectPath, engineRoot, distRoot)
 
 	if !usePublished {
+		cleanEngineSoundsBeforePublish(engineRoot)
 		cmd := silentCmd("dotnet", "publish", "-c", "Release", "-o", distRoot,
 			"-p:StaticWebAssetsCompressContent=false",
 			"-p:StaticWebAssetCompressionMode=None",
@@ -260,9 +188,74 @@ func (a *App) BuildGame(projectPath string) (string, error) {
 			_ = copyDir(filepath.Join(engineRoot, "wwwroot"), filepath.Join(distRoot, "wwwroot"))
 		}
 	}
-	// KIMONO FIX v3: podglad serwuje z engineRoot (engine-work), nie z dist - kopiuj do obu
-	copyProjectSoundsToAll(projectPath, engineRoot, distRoot)
 	return distRoot, nil
+}
+
+// FIX: dzwiek nie dziala w exe, bo JS robi '/sounds/' + sciezka z danych.
+// Dane w day1.json maja "sounds/sfx/sample-3s.mp3" (tak zapisuje edytor),
+// a JS dokleja "/sounds/" z przodu -> szuka "/sounds/sounds/sfx/..."
+// Nie ruszamy JSON (to psulo localhost), tylko dajemy plik w OBU miejscach:
+//
+//	dist/wwwroot/sounds/sfx/sample-3s.mp3       (gdy JS uzyje sciezki z danych)
+//	dist/wwwroot/sounds/sounds/sfx/sample-3s.mp3 (gdy JS doklei /sounds/)
+//
+// Wtedy niezaleznie od tego, ktora sciezke JS wygeneruje, plik jest.
+// To samo bylo powodem, ze wczesniej exe dzialalo: plik byl w sounds/sounds/,
+// a REVERT to usunal i exe przestalo grac.
+func copyProjectSoundsWebOnly(projectPath, distRoot string) {
+	srcDir := filepath.Join(projectPath, "sounds")
+	if _, err := os.Stat(srcDir); err != nil {
+		return
+	}
+	dstBase := filepath.Join(distRoot, "wwwroot")
+	_ = filepath.Walk(srcDir, func(p string, info fs.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		low := strings.ToLower(info.Name())
+		if !(strings.HasSuffix(low, ".mp3") || strings.HasSuffix(low, ".wav") || strings.HasSuffix(low, ".ogg")) {
+			return nil
+		}
+		rel, _ := filepath.Rel(srcDir, p)
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return nil
+		}
+		for _, dst := range []string{
+			filepath.Join(dstBase, "sounds", rel),
+			filepath.Join(dstBase, "sounds", "sounds", rel),
+			filepath.Join(dstBase, "sounds", info.Name()),
+			filepath.Join(dstBase, info.Name()),
+		} {
+			_ = os.MkdirAll(filepath.Dir(dst), 0755)
+			_ = os.WriteFile(dst, b, 0644)
+		}
+		return nil
+	})
+}
+
+// FIX WEB: localhost (app_run) kopiuje dzwieki do engine/wwwroot przed dotnet run.
+// Te pliki tam zostaja i potem dotnet publish w PACZCE WEB widzi w wwwroot/sounds/
+// pliki, ktorych nie ma w manifeście Static Web Assets -> MSB3030 / exit status 1.
+// Dlatego przed KAZDYM dotnet publish czyscimy tylko nasze dzwieki z engine/wwwroot.
+// Dzwieki do paczki i tak trafiaja PO publish, do dist/wwwroot (copyProjectSoundsWebOnly),
+// wiec czyszczenie przed publish nic nie psuje.
+func cleanEngineSoundsBeforePublish(engineRoot string) {
+	_ = os.RemoveAll(filepath.Join(engineRoot, "wwwroot", "sounds"))
+	_ = os.RemoveAll(filepath.Join(engineRoot, "Assets", "wwwroot", "sounds"))
+	// Luzne pliki, ktore wczesniejsze latki kladly w wwwroot (sample-3s.mp3 itd.)
+	if entries, err := os.ReadDir(filepath.Join(engineRoot, "wwwroot")); err == nil {
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			low := strings.ToLower(e.Name())
+			if strings.HasSuffix(low, ".mp3") || strings.HasSuffix(low, ".wav") || strings.HasSuffix(low, ".ogg") {
+				_ = os.Remove(filepath.Join(engineRoot, "wwwroot", e.Name()))
+			}
+		}
+	}
+	// Pokaz prawdziwy blad publish w logu, zeby nie bylo samego "exit status 1"
 }
 
 func getNextExeName(downloads, safeName string) (string, string) {
@@ -380,6 +373,7 @@ func (a *App) BuildExeGame(projectPath string) (string, error) {
 	// Silnik z CI jest juz zbudowany - nie wolamy dotnet publish dla niego.
 	// W trybie dev (zrodla) budujemy normalnie.
 	if !usePublished {
+		cleanEngineSoundsBeforePublish(engineRoot)
 		cmd := silentCmd("dotnet", "publish", "-c", "Release", "-o", distRoot,
 			"-p:StaticWebAssetsCompressContent=false",
 			"-p:StaticWebAssetCompressionMode=None",
@@ -438,8 +432,8 @@ func (a *App) BuildExeGame(projectPath string) (string, error) {
 		})
 	}
 
-	// KIMONO FIX v3: EXE + podglad - kopiuj do engineRoot i distRoot, wszystkie warianty sciezek
-	copyProjectSoundsToAll(a.projectPath, engineRoot, distRoot)
+	// REVERT + WEB ONLY: dzwieki do dist, zeby web/exe mialy sounds/sfx/...
+	copyProjectSoundsWebOnly(a.projectPath, distRoot)
 
 	downloads := getDownloadsFolder()
 	gameName := filepath.Base(a.projectPath)
@@ -523,9 +517,6 @@ class Program {
             ".gif" => "image/gif",
             ".svg" => "image/svg+xml",
             ".wasm" => "application/wasm",
-            ".mp3" => "audio/mpeg",
-            ".wav" => "audio/wav",
-            ".ogg" => "audio/ogg",
             ".woff" => "font/woff",
             ".woff2" => "font/woff2",
             ".ttf" => "font/ttf",
@@ -839,6 +830,7 @@ func (a *App) BuildPublicPack(projectPath string) (string, error) {
 	}
 
 	if !usePublished {
+		cleanEngineSoundsBeforePublish(engineRoot)
 		cmd := silentCmd("dotnet", "publish", "-c", "Release", "-o", distRoot,
 			"-p:StaticWebAssetsCompressContent=false",
 			"-p:StaticWebAssetCompressionMode=None",
@@ -895,8 +887,8 @@ func (a *App) BuildPublicPack(projectPath string) (string, error) {
 		os.WriteFile(filepath.Join(distRoot, "wwwroot", "project.janproj"), b, 0644)
 	}
 
-	// KIMONO FIX v3: paczka + podglad - kopiuj do engineRoot i distRoot, wszystkie warianty
-	copyProjectSoundsToAll(projectPath, engineRoot, distRoot)
+	// REVERT + WEB ONLY: dzwieki do dist przed spakowaniem do zip
+	copyProjectSoundsWebOnly(projectPath, distRoot)
 
 	gameName := filepath.Base(projectPath)
 	safeName := strings.ReplaceAll(gameName, " ", "-")
