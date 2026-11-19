@@ -114,12 +114,11 @@ public class GameEngine
         GameState.ReactionImage = _avatar.IsAllowedAsset(choice.ReactionImage?? "")? choice.ReactionImage?? "" : "";
         StateChanged?.Invoke();
 
-        if (!string.IsNullOrWhiteSpace(choice.SoundFile))
-        {
-            var lower = choice.SoundFile.ToLowerInvariant();
-            var blacklist = new[] { "s1.mp3", "s2.mp3", "s3.mp3", "old_music.mp3", "muzyka.mp3" };
-            if (!blacklist.Contains(lower)) _ = _js.InvokeVoidAsync("JanuszAudio.playVoice", $"sounds/{choice.SoundFile}");
-        }
+        // MINIMAL FIX: NIE gramy tu. Tylko zapamietujemy dzwiek wyboru.
+        // Wczesniej bylo tu: JanuszAudio.playVoice($"sounds/{choice.SoundFile}")
+        // i to gralo PO scenie, przy wychodzeniu. Teraz zagramy go dopiero
+        // po LoadScene nowej sceny, ponizej, tym samym starym playVoice.
+        var pendingSfx = choice.SoundFile;
 
         if (!string.IsNullOrWhiteSpace(GameState.ReactionText) ||!string.IsNullOrWhiteSpace(GameState.ReactionImage))
         {
@@ -135,12 +134,30 @@ public class GameEngine
             var scenes = await _loader.LoadDayAsync(nextDay);
             GameState.AllScenes = scenes;
             LoadScene(scenes.FirstOrDefault(s => s.Id.StartsWith("start"))?.Id?? scenes.First().Id);
+            // MINIMAL FIX: dzwiek gra NA POCZATKU nowej sceny, nie przy kliknieciu starej.
+            // Uzywamy TEGO SAMEGO playVoice co wczesniej, bez nowej funkcji w JS.
+            // Bez "sounds/" na poczatku - JS sam to poprawia w resolveSrc.
+            if (!string.IsNullOrWhiteSpace(pendingSfx))
+            {
+                var lower = pendingSfx.ToLowerInvariant();
+                var blacklist = new[] { "s1.mp3", "s2.mp3", "s3.mp3", "old_music.mp3", "muzyka.mp3" };
+                if (!blacklist.Contains(lower) && !blacklist.Contains(System.IO.Path.GetFileName(lower)))
+                    _ = _js.InvokeVoidAsync("JanuszAudio.playVoice", pendingSfx);
+            }
             return;
         }
         if (choice.Next == "END") { GameState.IsFinished = true; StateChanged?.Invoke(); return; }
 
         if (!await _loader.EnsureSceneLoadedAsync(GameState.AllScenes, choice.Next)) return;
         LoadScene(choice.Next);
+        // MINIMAL FIX: dzwiek gra NA POCZATKU nowej sceny.
+        if (!string.IsNullOrWhiteSpace(pendingSfx))
+        {
+            var lower = pendingSfx.ToLowerInvariant();
+            var blacklist = new[] { "s1.mp3", "s2.mp3", "s3.mp3", "old_music.mp3", "muzyka.mp3" };
+            if (!blacklist.Contains(lower) && !blacklist.Contains(System.IO.Path.GetFileName(lower)))
+                _ = _js.InvokeVoidAsync("JanuszAudio.playVoice", pendingSfx);
+        }
     }
 
     public void SkipReaction() => _reactionCts?.Cancel();
